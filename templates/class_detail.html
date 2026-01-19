@@ -3,6 +3,7 @@
 <div class="card" style="text-align:left;">
   <h2 style="text-align:center;">{{ cls.name }}</h2>
   <p style="text-align:center;">학급 코드: <b>{{ code }}</b></p>
+
   <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin:12px 0;">
     <div style="font-weight:800;">측정 회차</div>
     <form method="get" action="" style="display:flex; gap:8px; align-items:center;">
@@ -13,19 +14,65 @@
       </select>
     </form>
   </div>
+
   <div class="subtitle" style="margin:0 0 8px 0;">
     학생은 회차를 선택하지 않고, 아래의 <b>회차별 링크</b>로 입장합니다.
   </div>
+
   <div class="card" style="background:#f8fafc; margin:10px 0 14px 0;">
     <div style="font-weight:900; margin-bottom:8px;">QR 코드로 배포하기</div>
     <div class="subtitle" style="margin:0 0 10px 0;">
       각 회차 QR을 학생들에게 보여주거나 인쇄해서 배포할 수 있습니다.
     </div>
+
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
       {% for s in session_links %}
+        {% set qr_src = '/qr/' ~ code ~ '/' ~ s.sid ~ '.png' %}
         <div style="background:white; border:1px solid #e5e7eb; border-radius:14px; padding:10px; text-align:center;">
           <div style="font-weight:900; margin-bottom:6px;">{{ s.label }}</div>
-          <img src="/qr/{{ code }}/{{ s.sid }}.png" alt="{{ s.label }} QR" style="width:120px; height:120px; border-radius:8px;" />
+
+          <!-- QR + 아이콘 영역 -->
+          <div style="position:relative; display:inline-block;">
+            <img
+              src="{{ qr_src }}"
+              alt="{{ s.label }} QR"
+              data-qr-label="{{ s.label }}"
+              style="width:120px; height:120px; border-radius:8px; border:1px solid #eef2f7;"
+            />
+
+            <!-- 상단 우측 아이콘 버튼(돋보기/다운로드) -->
+            <div style="position:absolute; right:6px; top:6px; display:flex; gap:6px;">
+              <!-- 돋보기(확대) -->
+              <button
+                type="button"
+                class="qr-icon-btn"
+                title="확대 보기"
+                onclick="openQrModal('{{ qr_src }}', '{{ s.label|e }}')"
+                style="width:28px; height:28px; border-radius:10px; border:1px solid #e5e7eb; background:rgba(255,255,255,0.92); display:inline-flex; align-items:center; justify-content:center; cursor:pointer;"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M10.5 19a8.5 8.5 0 1 1 0-17 8.5 8.5 0 0 1 0 17Z" stroke="currentColor" stroke-width="2"/>
+                  <path d="M16.8 16.8 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+
+              <!-- 다운로드(PNG 저장) -->
+              <button
+                type="button"
+                class="qr-icon-btn"
+                title="PNG 다운로드"
+                onclick="downloadQrPng('{{ qr_src }}', '{{ s.label|e }}')"
+                style="width:28px; height:28px; border-radius:10px; border:1px solid #e5e7eb; background:rgba(255,255,255,0.92); display:inline-flex; align-items:center; justify-content:center; cursor:pointer;"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4 17v3h16v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
           <div style="margin-top:8px;">
             <a class="pill" href="{{ s.url }}" style="text-decoration:none; display:inline-block;">{{ s.label }} 링크</a>
           </div>
@@ -33,6 +80,7 @@
       {% endfor %}
     </div>
   </div>
+
   <hr>
   <ul>
     {% for r in rows %}
@@ -48,4 +96,102 @@
     {% endfor %}
   </ul>
 </div>
+
+<!-- QR 확대 모달 -->
+<div id="qrModal"
+     style="position:fixed; inset:0; background:rgba(0,0,0,0.55); display:none; align-items:center; justify-content:center; z-index:99999; padding:24px;">
+  <div style="background:#fff; border-radius:16px; max-width:min(92vw, 520px); width:100%; padding:14px; border:1px solid #e5e7eb;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+      <div id="qrModalTitle" style="font-weight:900;">QR 확대</div>
+      <button type="button" onclick="closeQrModal()"
+              style="border:1px solid #e5e7eb; background:#fff; border-radius:12px; padding:8px 10px; cursor:pointer;">
+        닫기
+      </button>
+    </div>
+    <div style="text-align:center;">
+      <img id="qrModalImg" src="" alt="QR 확대" style="width:min(420px, 78vw); height:auto; border-radius:12px; border:1px solid #eef2f7;">
+    </div>
+  </div>
+</div>
+
+<script>
+  function openQrModal(src, label){
+    const modal = document.getElementById('qrModal');
+    const img = document.getElementById('qrModalImg');
+    const title = document.getElementById('qrModalTitle');
+    img.src = src;
+    title.textContent = label ? (label + ' QR 확대') : 'QR 확대';
+    modal.style.display = 'flex';
+  }
+
+  function closeQrModal(){
+    const modal = document.getElementById('qrModal');
+    const img = document.getElementById('qrModalImg');
+    modal.style.display = 'none';
+    img.src = '';
+  }
+
+  // 바깥 클릭 닫기
+  document.getElementById('qrModal').addEventListener('click', (e) => {
+    if (e.target.id === 'qrModal') closeQrModal();
+  });
+
+  // ESC 닫기
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeQrModal();
+  });
+
+  async function <script>
+  function safeFilename(s){
+    // 파일명에 문제될 수 있는 문자 제거/치환 (Windows/macOS 공통 안전)
+    return (s || '')
+      .trim()
+      .replace(/[\\\/:*?"<>|]/g, '')   // 금지 문자 제거
+      .replace(/\s+/g, '_');           // 공백은 _
+  }
+
+  async function downloadQrPng(src, label){
+    try {
+      const res = await fetch(src, { cache: 'no-store' });
+      if (!res.ok) throw new Error('QR fetch failed: ' + res.status);
+      const blob = await res.blob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      const nice = safeFilename(label);   // 예: "1차", "사전(0차)" 등
+      a.download = `qr_${nice || 'qr'}.png`;
+
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.open(src, '_blank');
+    }
+  }
+</script>
+{
+    try {
+      // 같은 origin(/qr/...)이라 fetch로 blob 다운로드가 가장 안정적
+      const res = await fetch(src, { cache: 'no-store' });
+      if (!res.ok) throw new Error('QR fetch failed: ' + res.status);
+      const blob = await res.blob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qr_${sid}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // 최후 fallback: 새 탭 열기(사용자가 직접 저장 가능)
+      window.open(src, '_blank');
+    }
+  }
+</script>
 {% endblock %}
+

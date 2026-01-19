@@ -93,6 +93,7 @@
     el.style.alignItems = 'center';
     el.style.gap = '8px';
     el.textContent = name;
+
     // 되돌리기(목록으로) 버튼
     if (!READONLY){
       const back = document.createElement('button');
@@ -113,6 +114,7 @@
         addChipBack(n);
         syncPlacements();
       });
+
       // textContent를 써버리면 버튼이 사라지므로, 이름 영역을 span으로 분리
       el.textContent = '';
       const label = document.createElement('span');
@@ -120,15 +122,17 @@
       el.appendChild(label);
       el.appendChild(back);
     }
+
     if (!READONLY) attachDrag(el);
     return el;
   }
 
+  // 캔버스 위 토큰 드래그(손가락/마우스 추종)
   function attachDrag(el){
     let dragging = false;
     let offsetX = 0, offsetY = 0;
 
-    // Pointer Events(터치/펜/마우스)로 통합
+    // Pointer Events(터치/펜/마우스) 통합
     el.addEventListener('pointerdown', (e) => {
       if (READONLY) return;
       dragging = true;
@@ -145,8 +149,11 @@
       const c = canvas.getBoundingClientRect();
       let x = e.clientX - c.left - offsetX;
       let y = e.clientY - c.top - offsetY;
+
+      // edge_margin 유지
       x = clamp(x, EDGE_MARGIN, c.width - el.offsetWidth - EDGE_MARGIN);
       y = clamp(y, EDGE_MARGIN, c.height - el.offsetHeight - EDGE_MARGIN);
+
       el.style.left = x + 'px';
       el.style.top = y + 'px';
       markPlaced(el.dataset.name);
@@ -222,15 +229,13 @@
     syncPlacements();
   }
 
-  // 친구 목록의 "칩" 자체를 그대로 끌어서 캔버스에 놓기 (태블릿/터치 친화)
-  // - 드래그 중에도 칩이 손가락 아래에서 보이도록 "칩 자신"을 이동시킵니다.
-  // - 캔버스에 놓으면 목록에서 제거되고, 캔버스의 토큰으로 배치됩니다.
-  // - 캔버스 밖에 놓으면 원래 자리로 돌아갑니다.
+  // 친구 목록의 "칩" 자체를 그대로 끌어서 캔버스에 놓기
+  // - 드래그 중에도 칩이 손가락 아래에서 보이도록 "칩 자신"을 fixed로 이동
+  // - placeholder 유지(그리드 레이아웃 붕괴 방지)
   function enableChipDragToCanvas(){
     let draggingChip = null;
     let placeholder = null;
     let offsetX = 0, offsetY = 0;
-    let originNextSibling = null;
     let originParent = null;
     let didDrop = false;
 
@@ -263,7 +268,6 @@
       }
 
       placeholder = null;
-      originNextSibling = null;
       originParent = null;
       draggingChip = null;
       didDrop = false;
@@ -273,11 +277,15 @@
       const name = chip.dataset.name;
       const c = canvas.getBoundingClientRect();
       const token = makeToken(name);
+
       // 드롭 위치를 캔버스 좌표로 변환 (칩 내부에서 잡은 오프셋 반영)
       let x = clientX - c.left - offsetX;
       let y = clientY - c.top - offsetY;
+
+      // edge_margin 유지
       x = clamp(x, EDGE_MARGIN, c.width - token.offsetWidth - EDGE_MARGIN);
       y = clamp(y, EDGE_MARGIN, c.height - token.offsetHeight - EDGE_MARGIN);
+
       token.style.left = x + 'px';
       token.style.top = y + 'px';
       canvas.appendChild(token);
@@ -288,7 +296,7 @@
     // 캔버스에 이미 놓인 친구는 목록에서 다시 생성할 수 있도록
     function addChipBack(name){
       if (READONLY) return;
-      // 이미 목록에 있으면 추가하지 않음
+
       const exists = Array.from(friendList.querySelectorAll('.chip')).some(c => c.dataset.name === name);
       if (exists) return;
 
@@ -329,16 +337,17 @@
       if (READONLY) return;
       const chip = e.target.closest('.chip');
       if (!chip) return;
+
       draggingChip = chip;
       didDrop = false;
+
       chip.setPointerCapture?.(e.pointerId);
       const r = chip.getBoundingClientRect();
       offsetX = e.clientX - r.left;
       offsetY = e.clientY - r.top;
 
-      // 그리드 레이아웃이 무너지지 않도록 placeholder를 남기고, 칩 자신을 fixed로 이동
+      // placeholder 유지
       originParent = chip.parentElement;
-      originNextSibling = chip.nextSibling;
       placeholder = document.createElement('div');
       placeholder.style.width = r.width + 'px';
       placeholder.style.height = r.height + 'px';
@@ -347,6 +356,7 @@
       placeholder.style.background = '#ffffff';
       originParent.insertBefore(placeholder, chip);
 
+      // 칩 자신을 fixed로 이동(포인터 추종)
       chip.style.position = 'fixed';
       chip.style.left = (e.clientX - offsetX) + 'px';
       chip.style.top = (e.clientY - offsetY) + 'px';
@@ -357,6 +367,7 @@
       chip.style.opacity = '0.98';
       chip.style.transform = 'translateZ(0)';
       document.body.appendChild(chip);
+
       e.preventDefault();
     });
 
@@ -369,7 +380,7 @@
 
     friendList.addEventListener('pointerup', (e) => {
       if (!draggingChip) return;
-      const name = draggingChip.dataset.name;
+
       const c = canvas.getBoundingClientRect();
       const inCanvas = (e.clientX >= c.left && e.clientX <= c.right && e.clientY >= c.top && e.clientY <= c.bottom);
 
@@ -388,14 +399,11 @@
 
   // makeToken에서 호출할 수 있도록(토큰 -> 목록 되돌리기)
   function addChipBack(name){
-    // enableChipDragToCanvas 내부에서 window.addChipBack을 세팅하지만,
-    // 방어적으로 존재하지 않는 경우를 대비합니다.
     if (window.addChipBack) window.addChipBack(name);
   }
 
   window.addEventListener('load', () => {
     enableChipDragToCanvas();
-    // DOM 렌더링 후 초기 배치 복원
     setTimeout(restoreInitial, 0);
   });
 </script>
