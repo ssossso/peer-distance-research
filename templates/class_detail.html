@@ -31,47 +31,45 @@
         <div style="background:white; border:1px solid #e5e7eb; border-radius:14px; padding:10px; text-align:center;">
           <div style="font-weight:900; margin-bottom:6px;">{{ s.label }}</div>
 
-          <!-- QR + 아이콘 영역 -->
-          <div style="position:relative; display:inline-block;">
-            <img
-              src="{{ qr_src }}"
-              alt="{{ s.label }} QR"
-              style="width:120px; height:120px; border-radius:8px; border:1px solid #eef2f7; display:block;"
-            />
+          <!-- QR 이미지 -->
+          <img
+            src="{{ qr_src }}"
+            alt="{{ s.label }} QR"
+            style="width:120px; height:120px; border-radius:8px; border:1px solid #eef2f7; display:block; margin:0 auto;"
+          />
 
-            <!-- 상단 우측 아이콘 버튼(돋보기/다운로드) -->
-            <div style="position:absolute; right:6px; top:6px; display:flex; gap:6px; z-index:5; pointer-events:auto;">
+          <!-- QR 아래 아이콘 (링크 위) -->
+          <div style="display:flex; gap:10px; justify-content:center; align-items:center; margin-top:8px; margin-bottom:6px;">
+            <!-- 확대 보기: 새 창/새 탭으로 QR 열기 -->
+            <button
+              type="button"
+              title="확대 보기(새 창)"
+              onclick="openQrNewWindow('{{ qr_src }}', '{{ s.label|e }}')"
+              style="width:34px; height:34px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:#111827;"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M10.5 19a8.5 8.5 0 1 1 0-17 8.5 8.5 0 0 1 0 17Z" stroke="currentColor" stroke-width="2"/>
+                <path d="M16.8 16.8 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
 
-              <!-- 돋보기(확대) -->
-              <button
-                type="button"
-                title="확대 보기"
-                onclick="openQrModal('{{ qr_src }}', '{{ s.label|e }}')"
-                style="color:#111827; width:28px; height:28px; border-radius:10px; border:1px solid #e5e7eb; background:rgba(255,255,255,0.92); display:inline-flex; align-items:center; justify-content:center; cursor:pointer;"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M10.5 19a8.5 8.5 0 1 1 0-17 8.5 8.5 0 0 1 0 17Z" stroke="currentColor" stroke-width="2"/>
-                  <path d="M16.8 16.8 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </button>
-
-              <!-- 다운로드(PNG 저장) -->
-              <button
-                type="button"
-                title="PNG 다운로드"
-                onclick="downloadQrPng('{{ qr_src }}', '{{ s.label|e }}')"
-                style="color:#111827; width:28px; height:28px; border-radius:10px; border:1px solid #e5e7eb; background:rgba(255,255,255,0.92); display:inline-flex; align-items:center; justify-content:center; cursor:pointer;"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M4 17v3h16v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </button>
-            </div>
+            <!-- 다운로드(PNG 저장) -->
+            <button
+              type="button"
+              title="PNG 다운로드"
+              onclick="downloadQrPng('{{ qr_src }}', '{{ s.label|e }}')"
+              style="width:34px; height:34px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:#111827;"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 17v3h16v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
 
-          <div style="margin-top:8px;">
+          <!-- n차 링크 -->
+          <div style="margin-top:4px;">
             <a class="pill" href="{{ s.url }}" style="text-decoration:none; display:inline-block;">{{ s.label }} 링크</a>
           </div>
         </div>
@@ -95,55 +93,22 @@
   </ul>
 </div>
 
-<!-- QR 확대 모달 -->
-<div id="qrModal"
-     style="position:fixed; inset:0; background:rgba(0,0,0,0.55); display:none; align-items:center; justify-content:center; z-index:99999; padding:24px;">
-  <div style="background:#fff; border-radius:16px; max-width:min(92vw, 520px); width:100%; padding:14px; border:1px solid #e5e7eb;">
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
-      <div id="qrModalTitle" style="font-weight:900;">QR 확대</div>
-      <button type="button" onclick="closeQrModal()"
-              style="border:1px solid #e5e7eb; background:#fff; border-radius:12px; padding:8px 10px; cursor:pointer;">
-        닫기
-      </button>
-    </div>
-    <div style="text-align:center;">
-      <img id="qrModalImg" src="" alt="QR 확대" style="width:min(420px, 78vw); height:auto; border-radius:12px; border:1px solid #eef2f7;">
-    </div>
-  </div>
-</div>
-
 <script>
-  function openQrModal(src, label){
-    const modal = document.getElementById('qrModal');
-    const img = document.getElementById('qrModalImg');
-    const title = document.getElementById('qrModalTitle');
-    img.src = src;
-    title.textContent = label ? (label + ' QR 확대') : 'QR 확대';
-    modal.style.display = 'flex';
-  }
-
-  function closeQrModal(){
-    const modal = document.getElementById('qrModal');
-    const img = document.getElementById('qrModalImg');
-    modal.style.display = 'none';
-    img.src = '';
-  }
-
-  // 바깥 클릭 닫기
-  document.getElementById('qrModal').addEventListener('click', (e) => {
-    if (e.target.id === 'qrModal') closeQrModal();
-  });
-
-  // ESC 닫기
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeQrModal();
-  });
-
   function safeFilename(s){
     return (s || '')
       .trim()
       .replace(/[\\\/:*?"<>|]/g, '')
       .replace(/\s+/g, '_');
+  }
+
+  function openQrNewWindow(src, label){
+    // 새 창/새 탭으로 QR 이미지를 크게 보여줍니다.
+    // 브라우저 설정에 따라 새 탭으로 열리는 것은 정상입니다.
+    const w = window.open(src, '_blank', 'noopener,noreferrer');
+    if (!w) {
+      // 팝업 차단 등으로 새 창이 막혔다면 같은 탭으로라도 열기
+      location.href = src;
+    }
   }
 
   async function downloadQrPng(src, label){
