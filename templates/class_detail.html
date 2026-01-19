@@ -39,33 +39,22 @@
           />
 
           <!-- QR 아래 아이콘 (링크 위) -->
-          <div style="display:flex; gap:10px; justify-content:center; align-items:center; margin-top:8px; margin-bottom:6px;">
-            <!-- 확대 보기: 새 창/새 탭으로 QR 열기 -->
+          <div style="display:flex; gap:8px; justify-content:center; align-items:center; margin-top:8px; margin-bottom:6px;">
+            <!-- 확대 보기: 새 창/새 탭으로만 열기 (현재 페이지 변화 없음) -->
             <button
               type="button"
-              title="확대 보기(새 창)"
-              onclick="openQrNewWindow('{{ qr_src }}', '{{ s.label|e }}')"
-              style="width:34px; height:34px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:#111827;"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M10.5 19a8.5 8.5 0 1 1 0-17 8.5 8.5 0 0 1 0 17Z" stroke="currentColor" stroke-width="2"/>
-                <path d="M16.8 16.8 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
+              title="크게 보기(새 창)"
+              onclick="openQrNewWindowOnly('{{ qr_src }}')"
+              style="width:26px; height:26px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; line-height:1;"
+            >🔎</button>
 
             <!-- 다운로드(PNG 저장) -->
             <button
               type="button"
               title="PNG 다운로드"
               onclick="downloadQrPng('{{ qr_src }}', '{{ s.label|e }}')"
-              style="width:34px; height:34px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:#111827;"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M4 17v3h16v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
+              style="width:26px; height:26px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; line-height:1;"
+            >📂</button>
           </div>
 
           <!-- n차 링크 -->
@@ -101,13 +90,12 @@
       .replace(/\s+/g, '_');
   }
 
-  function openQrNewWindow(src, label){
-    // 새 창/새 탭으로 QR 이미지를 크게 보여줍니다.
-    // 브라우저 설정에 따라 새 탭으로 열리는 것은 정상입니다.
+  // 중요: 현재 페이지는 절대 이동하지 않음.
+  // 팝업이 차단되면 "안 열렸습니다" 안내만 하고 끝냄(중복 방지).
+  function openQrNewWindowOnly(src){
     const w = window.open(src, '_blank', 'noopener,noreferrer');
     if (!w) {
-      // 팝업 차단 등으로 새 창이 막혔다면 같은 탭으로라도 열기
-      location.href = src;
+      alert('새 창이 차단되어 QR을 열 수 없어요. 브라우저에서 팝업을 허용한 뒤 다시 눌러주세요.');
     }
   }
 
@@ -128,7 +116,7 @@
       URL.revokeObjectURL(url);
     } catch (err) {
       // 최후 fallback: 새 탭 열기(사용자가 직접 저장 가능)
-      window.open(src, '_blank');
+      window.open(src, '_blank', 'noopener,noreferrer');
     }
   }
 </script>
