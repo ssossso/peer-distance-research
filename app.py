@@ -85,17 +85,25 @@ def teacher_signup():
                 "username": username,
                 "pw_hash": pw_hash
             })
-        except Exception:
-            return render_template("teacher_signup.html", error="서버 통신 오류")
+        except Exception as e:
+            return render_template("teacher_signup.html", error=f"서버 통신 오류: {e}")
 
-        if resp.get("status") == "exists":
+        # 디버그: 응답 status를 그대로 보여줌
+        status = resp.get("status")
+        if status == "ok":
+            return redirect("/teacher/login")
+
+        if status == "exists":
             return render_template("teacher_signup.html", error="이미 존재하는 아이디입니다.")
-        if resp.get("status") != "ok":
-            return render_template("teacher_signup.html", error="회원가입 실패")
 
-        return redirect("/teacher/login")
+        if status == "blocked":
+            return render_template("teacher_signup.html", error="blocked: GOOGLE_SECRET(비밀키) 불일치 또는 누락")
+
+        # error 등 기타
+        return render_template("teacher_signup.html", error=f"회원가입 실패: {resp}")
 
     return render_template("teacher_signup.html")
+
 
 # ---------- 교사 로그인 ----------
 @app.route("/teacher/login", methods=["GET", "POST"])
