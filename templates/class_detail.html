@@ -36,7 +36,6 @@
             <img
               src="{{ qr_src }}"
               alt="{{ s.label }} QR"
-              data-qr-label="{{ s.label }}"
               style="width:120px; height:120px; border-radius:8px; border:1px solid #eef2f7;"
             />
 
@@ -45,7 +44,6 @@
               <!-- 돋보기(확대) -->
               <button
                 type="button"
-                class="qr-icon-btn"
                 title="확대 보기"
                 onclick="openQrModal('{{ qr_src }}', '{{ s.label|e }}')"
                 style="width:28px; height:28px; border-radius:10px; border:1px solid #e5e7eb; background:rgba(255,255,255,0.92); display:inline-flex; align-items:center; justify-content:center; cursor:pointer;"
@@ -59,7 +57,6 @@
               <!-- 다운로드(PNG 저장) -->
               <button
                 type="button"
-                class="qr-icon-btn"
                 title="PNG 다운로드"
                 onclick="downloadQrPng('{{ qr_src }}', '{{ s.label|e }}')"
                 style="width:28px; height:28px; border-radius:10px; border:1px solid #e5e7eb; background:rgba(255,255,255,0.92); display:inline-flex; align-items:center; justify-content:center; cursor:pointer;"
@@ -141,13 +138,11 @@
     if (e.key === 'Escape') closeQrModal();
   });
 
-  async function <script>
   function safeFilename(s){
-    // 파일명에 문제될 수 있는 문자 제거/치환 (Windows/macOS 공통 안전)
     return (s || '')
       .trim()
-      .replace(/[\\\/:*?"<>|]/g, '')   // 금지 문자 제거
-      .replace(/\s+/g, '_');           // 공백은 _
+      .replace(/[\\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, '_');
   }
 
   async function downloadQrPng(src, label){
@@ -159,30 +154,8 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-
-      const nice = safeFilename(label);   // 예: "1차", "사전(0차)" 등
+      const nice = safeFilename(label);
       a.download = `qr_${nice || 'qr'}.png`;
-
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      window.open(src, '_blank');
-    }
-  }
-</script>
-{
-    try {
-      // 같은 origin(/qr/...)이라 fetch로 blob 다운로드가 가장 안정적
-      const res = await fetch(src, { cache: 'no-store' });
-      if (!res.ok) throw new Error('QR fetch failed: ' + res.status);
-      const blob = await res.blob();
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `qr_${sid}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -194,4 +167,3 @@
   }
 </script>
 {% endblock %}
-

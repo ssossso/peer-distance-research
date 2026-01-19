@@ -4,7 +4,6 @@ from urllib.parse import quote, unquote
 import io
 import sys
 import subprocess
-import requests
 
 """Flask app for class relationship measurement.
 
@@ -18,26 +17,7 @@ app.secret_key = "secret-key"
 SITE_TITLE = "내가 바라본 우리 반"
 DATA_FILE = "data.json"
 
-GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyPnpeTtY2eva-7yJgi3ql2iquROaitNJmULGGbYyfdQqh_4YnXspu88L9osX3mJaTx/exec"
-GOOGLE_SECRET = "my_super_secret_key_2026"
-
 # ---------- 데이터 ----------
-
-### ★ Google Sheets로 저장하는 함수 ★
-def save_to_google_sheet(student, session_id, placements, ip):
-    payload = {
-        "student": student,
-        "session": session_id,
-        "placements": placements,
-        "ip": ip,
-        "secret": GOOGLE_SECRET
-    }
-    try:
-        requests.post(GOOGLE_SHEET_URL, json=payload, timeout=5)
-    except Exception as e:
-        print("Google Sheets 저장 실패:", e)
-
-
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {"teachers": {}, "classes": {}}
@@ -529,14 +509,6 @@ def student_write():
         student.setdefault("sessions", {})[sid] = ssession
         d["classes"][code] = ensure_class_schema(cls)
         save_data_safely(d)
-
-        ### ★ Google Sheets에도 저장 ★
-        save_to_google_sheet(
-            student=name,
-            session_id=sid,
-            placements=placements_obj,
-            ip=request.remote_addr
-        )
         return redirect("/student/submitted")
 
     return render_template(
