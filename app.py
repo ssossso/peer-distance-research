@@ -476,9 +476,11 @@ def student_write():
         session["sid"] = sid
 
     student = cls["students_data"][name]
-    ssession = (student.get("sessions") or {}).get(sid, {"placements": {}, "submitted": False})
+    ssession = (student.get("sessions") or {}).get(
+        sid, {"placements": {}, "submitted": False}
+    )
 
-    # 친구 목록(본인 제외). 과거 데이터 호환: students가 ["이름", ...]일 수도 있음
+    # 친구 목록(본인 제외)
     friends = []
     for item in cls.get("students", []):
         if isinstance(item, dict):
@@ -490,7 +492,7 @@ def student_write():
             continue
         friends.append(n)
 
-    # 기존 배치(임시저장/제출완료 모두) 로드
+    # 기존 배치 로드
     placements = ssession.get("placements", {}) or {}
 
     if request.method == "POST":
@@ -503,48 +505,49 @@ def student_write():
         except Exception:
             placements_obj = {}
 
-        # --- (추가) 구글 시트에 결과 저장 ---
-try:
-    ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
-    resp = post_to_sheet({
-        "action": "result_append",
-        "teacher": cls.get("teacher", ""),   # 이 반을 만든 교사 아이디
-        "class_code": code,
-        "student": name,
-        "session": sid,
-        "placements": placements_obj,
-        "ip": ip_addr
-    })
-    if resp.get("status") != "ok":
-        # secret이 틀리거나(blocked) 시트 문제 등
-        return render_template(
-            "student_write.html",
-            name=name,
-            student_session=ssession,
-            sid=sid,
-            session_meta=cls.get("sessions", {}).get(sid, {}),
-            friends=friends,
-            placements=placements_obj,
-            error="저장에 실패했습니다(구글 시트). 잠시 후 다시 제출해 주세요."
-        )
-except Exception:
-    return render_template(
-        "student_write.html",
-        name=name,
-        student_session=ssession,
-        sid=sid,
-        session_meta=cls.get("sessions", {}).get(sid, {}),
-        friends=friends,
-        placements=placements_obj,
-        error="저장에 실패했습니다(서버 통신 오류). 잠시 후 다시 제출해 주세요."
-    )
+        # --- 구글 시트에 결과 저장 ---
+        try:
+            ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
+            resp = post_to_sheet({
+                "action": "result_append",
+                "teacher": cls.get("teacher", ""),
+                "class_code": code,
+                "student": name,
+                "session": sid,
+                "placements": placements_obj,
+                "ip": ip_addr
+            })
 
-        # 저장 포맷: {"친구이름": {"x": int, "y": int, "d": float}}
+            if resp.get("status") != "ok":
+                return render_template(
+                    "student_write.html",
+                    name=name,
+                    student_session=ssession,
+                    sid=sid,
+                    session_meta=cls.get("sessions", {}).get(sid, {}),
+                    friends=friends,
+                    placements=placements_obj,
+                    error="저장에 실패했습니다(구글 시트). 잠시 후 다시 제출해 주세요."
+                )
+        except Exception:
+            return render_template(
+                "student_write.html",
+                name=name,
+                student_session=ssession,
+                sid=sid,
+                session_meta=cls.get("sessions", {}).get(sid, {}),
+                friends=friends,
+                placements=placements_obj,
+                error="저장에 실패했습니다(서버 통신 오류). 잠시 후 다시 제출해 주세요."
+            )
+
+        # 로컬에도 저장
         ssession["placements"] = placements_obj
         ssession["submitted"] = True
         student.setdefault("sessions", {})[sid] = ssession
         d["classes"][code] = ensure_class_schema(cls)
         save_data_safely(d)
+
         return redirect("/student/submitted")
 
     return render_template(
@@ -556,6 +559,7 @@ except Exception:
         friends=friends,
         placements=placements,
     )
+
 
 # ---------- 제출 완료 ----------
 @app.route("/student/submitted")
