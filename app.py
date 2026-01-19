@@ -15,7 +15,7 @@ DATA_FILE = "data.json"
 
 # --- Google Sheets 연동 ---
 GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyPnpeTtY2eva-7yJgi3ql2iquROaitNJmULGGbYyfdQqh_4YnXspu88L9osX3mJaTx/exec"
-GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "")
+GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "").strip()
 
 # ---------- Google Sheets POST ----------
 def post_to_sheet(payload: dict) -> dict:
