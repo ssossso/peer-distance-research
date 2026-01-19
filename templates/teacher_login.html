@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>교사 로그인</h2>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post">
+    아이디<br><input name="username" autocomplete="username"><br><br>
+    비밀번호<br><input type="password" name="password" autocomplete="current-password"><br><br>
+    <button>로그인</button>
+  </form>
+  <hr style="margin:18px 0;">
+  <div>
+    아직 계정이 없으신가요?<br>
+    <a href="/teacher/signup">교사 회원가입</a>
+  </div>
+</div>
+{% endblock %}

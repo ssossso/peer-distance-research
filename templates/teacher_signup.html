@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>교사 회원가입</h2>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post">
+    아이디<br><input name="username" autocomplete="username"><br><br>
+    비밀번호<br><input type="password" name="password" autocomplete="new-password"><br><br>
+    비밀번호 확인<br><input type="password" name="password2" autocomplete="new-password"><br><br>
+    <button>회원가입</button>
+  </form>
+</div>
+{% endblock %}

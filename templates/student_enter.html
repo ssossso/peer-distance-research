@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>학생 입장</h2>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post">
+    학급 코드<br><input name="code" placeholder="예: A1B2C3"><br><br>
+    이름<br><input name="name" placeholder="학생 이름"><br><br>
+    <button>입장</button>
+  </form>
+</div>
+{% endblock %}

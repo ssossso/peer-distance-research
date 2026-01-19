@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="text-align:left;">
+  <h2 style="text-align:center;">{{ cls.name }}</h2>
+  <p style="text-align:center;">학급 코드: <b>{{ code }}</b></p>
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin:12px 0;">
+    <div style="font-weight:800;">측정 회차</div>
+    <form method="get" action="" style="display:flex; gap:8px; align-items:center;">
+      <select name="sid" onchange="this.form.submit();" style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
+        {% for _sid, meta in cls.sessions|dictsort(true) %}
+          <option value="{{ _sid }}" {% if _sid == sid %}selected{% endif %}>{{ meta.label if meta.label else (_sid ~ '차') }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  <div class="subtitle" style="margin:0 0 8px 0;">
+    학생은 회차를 선택하지 않고, 아래의 <b>회차별 링크</b>로 입장합니다.
+  </div>
+  <div class="card" style="background:#f8fafc; margin:10px 0 14px 0;">
+    <div style="font-weight:900; margin-bottom:8px;">QR 코드로 배포하기</div>
+    <div class="subtitle" style="margin:0 0 10px 0;">
+      각 회차 QR을 학생들에게 보여주거나 인쇄해서 배포할 수 있습니다.
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+      {% for s in session_links %}
+        <div style="background:white; border:1px solid #e5e7eb; border-radius:14px; padding:10px; text-align:center;">
+          <div style="font-weight:900; margin-bottom:6px;">{{ s.label }}</div>
+          <img src="/qr/{{ code }}/{{ s.sid }}.png" alt="{{ s.label }} QR" style="width:120px; height:120px; border-radius:8px;" />
+          <div style="margin-top:8px;">
+            <a class="pill" href="{{ s.url }}" style="text-decoration:none; display:inline-block;">{{ s.label }} 링크</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  <hr>
+  <ul>
+    {% for r in rows %}
+      <li>
+        <div class="student-item">
+          <div class="student-name"><span class="no">{{ r.no }}</span> {{ r.name }}</div>
+          <div class="student-actions">
+            <a class="goto-btn" href="/teacher/class/{{ code }}/student/{{ r.url_name }}?sid={{ sid }}" title="학생 개별 페이지로 이동">↗</a>
+            <span class="status">{{ r.status }}</span>
+          </div>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

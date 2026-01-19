@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="text-align:left;">
+  <h2 style="text-align:center;">내 학급</h2>
+  <div style="text-align:center; margin-bottom:12px;">
+    <a class="main-btn" style="width:220px;" href="/teacher/create">학급 생성</a>
+  </div>
+  {% if not classes %}
+    <p style="text-align:center; color:#666;">아직 생성한 학급이 없습니다.</p>
+  {% else %}
+    <ul>
+      {% for code, cls in classes.items() %}
+        <li>
+          <a href="/teacher/class/{{ code }}">{{ cls.name }}</a>
+          <span class="muted">({{ code }})</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+{% endblock %}

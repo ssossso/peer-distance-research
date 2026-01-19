@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:980px; text-align:left;">
+  <h2 style="margin:0 0 6px 0; text-align:center;">{{ current_class.name if current_class else "내가 바라본 우리 반" }}</h2>
+  <p style="margin:0 0 14px 0; text-align:center;">
+    <b>{{ name }}</b>
+    <span class="muted" style="margin-left:8px;">{{ session_meta.label if session_meta and session_meta.label else sid ~ '차' }}</span>
+    {% if student_session.submitted %}
+      <span class="status" style="margin-left:8px;">제출 완료</span>
+    {% else %}
+      <span class="muted" style="margin-left:8px;">아직 제출 전</span>
+    {% endif %}
+  </p>
+
+  <div class="subtitle" style="text-align:left; margin-bottom:12px;">
+    오른쪽(또는 아래) 친구 이름을 <b>그대로 끌어서</b> 아래 공간에 놓아 주세요. 가운데(나)와 <b>가까울수록 친하다고 생각하는 친구</b>입니다.
+  </div>
+
+  <form method="post" id="measureForm" onsubmit="return onSubmitMeasure();">
+    <input type="hidden" name="placements_json" id="placements_json" value="">
+
+    <div style="display:grid; grid-template-columns: 1fr 260px; gap:12px; align-items:start;">
+      <!-- 캔버스 -->
+      <div>
+        <div id="canvas" style="position:relative; height:clamp(360px, 62vh, 520px); border:1px solid #d1d5db; border-radius:12px; background:#fff; overflow:hidden; touch-action:none;">
+          <div id="selfDot" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);">
+            <div style="width:18px; height:18px; border-radius:999px; background:#4a6cf7; margin:auto;"></div>
+            <div style="font-size:12px; font-weight:800; margin-top:6px; text-align:center;">나</div>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:8px; font-size:12px;">
+          팁: 화면 가운데(나)를 기준으로 생각하면 됩니다. 이름은 가까울수록 왼쪽/위쪽/오른쪽/아래쪽 어디든 괜찮습니다.
+        </div>
+      </div>
+
+      <!-- 친구 목록 -->
+      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd; height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
+        <div style="font-weight:800; margin-bottom:10px;">친구 목록</div>
+        <div id="friendList" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start; overflow:hidden; flex:1;">
+          {% for f in friends %}
+            <div class="chip" data-name="{{ f }}" style="user-select:none; cursor:grab; padding:8px 6px; border-radius:10px; border:1px solid #c7d2fe; background:#eef2ff; font-weight:800; font-size:12.5px; text-align:center; touch-action:none;">
+              {{ f }}
+            </div>
+          {% endfor %}
+        </div>
+
+        <hr style="border:none; border-top:1px solid #e5e7eb; margin:12px 0;">
+        <div style="display:flex; gap:8px;">
+          {% if not student_session.submitted %}
+            <button type="submit" style="flex:1;">제출하기</button>
+          {% else %}
+            <button type="button" disabled style="flex:1; opacity:0.6;">제출 완료</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  const READONLY = {{ 'true' if student_session.submitted else 'false' }};
+  const friends = {{ friends|tojson }};
+  const initialPlacements = {{ placements|tojson }};
+
+  const canvas = document.getElementById('canvas');
+  const friendList = document.getElementById('friendList');
+  const placementsInput = document.getElementById('placements_json');
+
+  function canvasCenter(){
+    const rect = canvas.getBoundingClientRect();
+    return { cx: rect.left + rect.width/2, cy: rect.top + rect.height/2, w: rect.width, h: rect.height };
+  }
+
+  function clamp(v, min, max){ return Math.min(Math.max(v, min), max); }
+
+  // 캔버스 가장자리에서 칩이 잘려 보이지 않도록 안전 여백
+  const EDGE_MARGIN = 6;
+
+  function makeToken(name){
+    const el = document.createElement('div');
+    el.className = 'token';
+    el.dataset.name = name;
+    el.style.position = 'absolute';
+    el.style.padding = '8px 10px';
+    el.style.borderRadius = '10px';
+    el.style.border = '1px solid #d1d5db';
+    el.style.background = '#ffffff';
+    el.style.fontWeight = '800';
+    el.style.fontSize = '13px';
+    el.style.cursor = READONLY ? 'default' : 'grab';
+    el.style.userSelect = 'none';
+    el.style.display = 'inline-flex';
+    el.style.alignItems = 'center';
+    el.style.gap = '8px';
+    el.textContent = name;
+    // 되돌리기(목록으로) 버튼
+    if (!READONLY){
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.textContent = '↩';
+      back.title = '목록으로 되돌리기';
+      back.style.marginLeft = '2px';
+      back.style.width = '26px';
+      back.style.height = '22px';
+      back.style.borderRadius = '8px';
+      back.style.border = '1px solid #e5e7eb';
+      back.style.background = '#f9fafb';
+      back.style.cursor = 'pointer';
+      back.style.padding = '0';
+      back.addEventListener('click', () => {
+        const n = el.dataset.name;
+        el.remove();
+        addChipBack(n);
+        syncPlacements();
+      });
+      // textContent를 써버리면 버튼이 사라지므로, 이름 영역을 span으로 분리
+      el.textContent = '';
+      const label = document.createElement('span');
+      label.textContent = name;
+      el.appendChild(label);
+      el.appendChild(back);
+    }
+    if (!READONLY) attachDrag(el);
+    return el;
+  }
+
+  function attachDrag(el){
+    let dragging = false;
+    let offsetX = 0, offsetY = 0;
+
+    // Pointer Events(터치/펜/마우스)로 통합
+    el.addEventListener('pointerdown', (e) => {
+      if (READONLY) return;
+      dragging = true;
+      el.setPointerCapture?.(e.pointerId);
+      el.style.cursor = 'grabbing';
+      const r = el.getBoundingClientRect();
+      offsetX = e.clientX - r.left;
+      offsetY = e.clientY - r.top;
+      e.preventDefault();
+    });
+
+    el.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const c = canvas.getBoundingClientRect();
+      let x = e.clientX - c.left - offsetX;
+      let y = e.clientY - c.top - offsetY;
+      x = clamp(x, EDGE_MARGIN, c.width - el.offsetWidth - EDGE_MARGIN);
+      y = clamp(y, EDGE_MARGIN, c.height - el.offsetHeight - EDGE_MARGIN);
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      markPlaced(el.dataset.name);
+      syncPlacements();
+      e.preventDefault();
+    });
+
+    el.addEventListener('pointerup', () => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.cursor = 'grab';
+      syncPlacements();
+    });
+  }
+
+  const placed = new Set();
+  function markPlaced(name){ placed.add(name); }
+
+  function syncPlacements(){
+    const cRect = canvas.getBoundingClientRect();
+    const center = { x: cRect.width/2, y: cRect.height/2 };
+    const out = {};
+    const tokens = canvas.querySelectorAll('.token');
+    tokens.forEach(t => {
+      const x = parseFloat(t.style.left || '0') + t.offsetWidth/2;
+      const y = parseFloat(t.style.top || '0') + t.offsetHeight/2;
+      const relX = Math.round(x - center.x);
+      const relY = Math.round(y - center.y);
+      const d = Math.sqrt(relX*relX + relY*relY);
+      out[t.dataset.name] = { x: relX, y: relY, d: Math.round(d*100)/100 };
+    });
+    placementsInput.value = JSON.stringify(out);
+    return out;
+  }
+
+  function onSubmitMeasure(){
+    if (READONLY) return false;
+    const p = syncPlacements();
+    const missing = friends.filter(n => !p[n]);
+    if (missing.length > 0){
+      alert('아직 배치하지 않은 친구가 있어요: ' + missing.join(', '));
+      return false;
+    }
+    return confirm('제출하면 수정할 수 없어요. 제출할까요?');
+  }
+
+  // 초기 배치가 있으면 복원
+  function restoreInitial(){
+    const cRect = canvas.getBoundingClientRect();
+    const center = { x: cRect.width/2, y: cRect.height/2 };
+
+    // 목록에서 해당 칩 제거
+    const chips = Array.from(friendList.querySelectorAll('.chip'));
+    chips.forEach(chip => {
+      const n = chip.dataset.name;
+      if (initialPlacements && initialPlacements[n]){
+        chip.remove();
+      }
+    });
+
+    if (initialPlacements){
+      Object.keys(initialPlacements).forEach((n) => {
+        const v = initialPlacements[n];
+        const token = makeToken(n);
+        const px = clamp(center.x + (v.x || 0) - token.offsetWidth/2, EDGE_MARGIN, cRect.width - token.offsetWidth - EDGE_MARGIN);
+        const py = clamp(center.y + (v.y || 0) - token.offsetHeight/2, EDGE_MARGIN, cRect.height - token.offsetHeight - EDGE_MARGIN);
+        token.style.left = px + 'px';
+        token.style.top = py + 'px';
+        canvas.appendChild(token);
+        markPlaced(n);
+      });
+    }
+    syncPlacements();
+  }
+
+  // 친구 목록의 "칩" 자체를 그대로 끌어서 캔버스에 놓기 (태블릿/터치 친화)
+  // - 드래그 중에도 칩이 손가락 아래에서 보이도록 "칩 자신"을 이동시킵니다.
+  // - 캔버스에 놓으면 목록에서 제거되고, 캔버스의 토큰으로 배치됩니다.
+  // - 캔버스 밖에 놓으면 원래 자리로 돌아갑니다.
+  function enableChipDragToCanvas(){
+    let draggingChip = null;
+    let placeholder = null;
+    let offsetX = 0, offsetY = 0;
+    let originNextSibling = null;
+    let originParent = null;
+    let didDrop = false;
+
+    function resetChipStyles(chip){
+      chip.style.position = '';
+      chip.style.left = '';
+      chip.style.top = '';
+      chip.style.zIndex = '';
+      chip.style.width = '';
+      chip.style.height = '';
+      chip.style.margin = '';
+      chip.style.transform = '';
+      chip.style.cursor = 'grab';
+      chip.style.opacity = '';
+    }
+
+    function cleanup(){
+      if (!draggingChip) return;
+
+      if (!didDrop){
+        // 원래 자리로 복귀
+        resetChipStyles(draggingChip);
+        if (placeholder && originParent){
+          originParent.insertBefore(draggingChip, placeholder);
+          placeholder.remove();
+        }
+      } else {
+        // 성공적으로 배치되면 placeholder 제거
+        placeholder?.remove();
+      }
+
+      placeholder = null;
+      originNextSibling = null;
+      originParent = null;
+      draggingChip = null;
+      didDrop = false;
+    }
+
+    function placeTokenFromChip(chip, clientX, clientY){
+      const name = chip.dataset.name;
+      const c = canvas.getBoundingClientRect();
+      const token = makeToken(name);
+      // 드롭 위치를 캔버스 좌표로 변환 (칩 내부에서 잡은 오프셋 반영)
+      let x = clientX - c.left - offsetX;
+      let y = clientY - c.top - offsetY;
+      x = clamp(x, EDGE_MARGIN, c.width - token.offsetWidth - EDGE_MARGIN);
+      y = clamp(y, EDGE_MARGIN, c.height - token.offsetHeight - EDGE_MARGIN);
+      token.style.left = x + 'px';
+      token.style.top = y + 'px';
+      canvas.appendChild(token);
+      markPlaced(name);
+      syncPlacements();
+    }
+
+    // 캔버스에 이미 놓인 친구는 목록에서 다시 생성할 수 있도록
+    function addChipBack(name){
+      if (READONLY) return;
+      // 이미 목록에 있으면 추가하지 않음
+      const exists = Array.from(friendList.querySelectorAll('.chip')).some(c => c.dataset.name === name);
+      if (exists) return;
+
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.dataset.name = name;
+      chip.style.userSelect = 'none';
+      chip.style.cursor = 'grab';
+      chip.style.padding = '8px 6px';
+      chip.style.borderRadius = '10px';
+      chip.style.border = '1px solid #c7d2fe';
+      chip.style.background = '#eef2ff';
+      chip.style.fontWeight = '800';
+      chip.style.fontSize = '12.5px';
+      chip.style.textAlign = 'center';
+      chip.style.touchAction = 'none';
+      chip.textContent = name;
+
+      // 원래 친구 순서(friends 배열)를 기준으로 정렬 삽입
+      const chips = Array.from(friendList.querySelectorAll('.chip'));
+      const myIdx = friends.indexOf(name);
+      let inserted = false;
+      for (const c of chips){
+        const idx = friends.indexOf(c.dataset.name);
+        if (idx > myIdx){
+          friendList.insertBefore(chip, c);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) friendList.appendChild(chip);
+    }
+
+    // makeToken에서 쓰도록 전역에 노출
+    window.addChipBack = addChipBack;
+
+    friendList.addEventListener('pointerdown', (e) => {
+      if (READONLY) return;
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      draggingChip = chip;
+      didDrop = false;
+      chip.setPointerCapture?.(e.pointerId);
+      const r = chip.getBoundingClientRect();
+      offsetX = e.clientX - r.left;
+      offsetY = e.clientY - r.top;
+
+      // 그리드 레이아웃이 무너지지 않도록 placeholder를 남기고, 칩 자신을 fixed로 이동
+      originParent = chip.parentElement;
+      originNextSibling = chip.nextSibling;
+      placeholder = document.createElement('div');
+      placeholder.style.width = r.width + 'px';
+      placeholder.style.height = r.height + 'px';
+      placeholder.style.borderRadius = '10px';
+      placeholder.style.border = '1px dashed #e5e7eb';
+      placeholder.style.background = '#ffffff';
+      originParent.insertBefore(placeholder, chip);
+
+      chip.style.position = 'fixed';
+      chip.style.left = (e.clientX - offsetX) + 'px';
+      chip.style.top = (e.clientY - offsetY) + 'px';
+      chip.style.zIndex = '9999';
+      chip.style.width = r.width + 'px';
+      chip.style.height = r.height + 'px';
+      chip.style.cursor = 'grabbing';
+      chip.style.opacity = '0.98';
+      chip.style.transform = 'translateZ(0)';
+      document.body.appendChild(chip);
+      e.preventDefault();
+    });
+
+    friendList.addEventListener('pointermove', (e) => {
+      if (!draggingChip) return;
+      draggingChip.style.left = (e.clientX - offsetX) + 'px';
+      draggingChip.style.top = (e.clientY - offsetY) + 'px';
+      e.preventDefault();
+    });
+
+    friendList.addEventListener('pointerup', (e) => {
+      if (!draggingChip) return;
+      const name = draggingChip.dataset.name;
+      const c = canvas.getBoundingClientRect();
+      const inCanvas = (e.clientX >= c.left && e.clientX <= c.right && e.clientY >= c.top && e.clientY <= c.bottom);
+
+      if (inCanvas){
+        placeTokenFromChip(draggingChip, e.clientX, e.clientY);
+        draggingChip.remove();
+        didDrop = true;
+      }
+
+      cleanup();
+      e.preventDefault();
+    });
+
+    friendList.addEventListener('pointercancel', cleanup);
+  }
+
+  // makeToken에서 호출할 수 있도록(토큰 -> 목록 되돌리기)
+  function addChipBack(name){
+    // enableChipDragToCanvas 내부에서 window.addChipBack을 세팅하지만,
+    // 방어적으로 존재하지 않는 경우를 대비합니다.
+    if (window.addChipBack) window.addChipBack(name);
+  }
+
+  window.addEventListener('load', () => {
+    enableChipDragToCanvas();
+    // DOM 렌더링 후 초기 배치 복원
+    setTimeout(restoreInitial, 0);
+  });
+</script>
+{% endblock %}
