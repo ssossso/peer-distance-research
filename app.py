@@ -1,3 +1,5 @@
+import requests
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, request, redirect, session, send_file
 import random, string, json, os
 from urllib.parse import quote, unquote
@@ -17,6 +19,10 @@ app.secret_key = "secret-key"
 SITE_TITLE = "내가 바라본 우리 반"
 DATA_FILE = "data.json"
 
+# --- Google Sheets 연동 설정 ---
+GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyPnpeTtY2eva-7yJgi3ql2iquROaitNJmULGGbYyfdQqh_4YnXspu88L9osX3mJaTx/exec"
+GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "")
+
 # ---------- 데이터 ----------
 def load_data():
     if not os.path.exists(DATA_FILE):
@@ -31,6 +37,13 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+# --- Google Sheets로 전송 ---
+def post_to_sheet(payload: dict) -> dict:
+    payload = dict(payload)
+    payload["secret"] = GOOGLE_SECRET
+    r = requests.post(GOOGLE_WEBAPP_URL, json=payload, timeout=10)
+    return r.json()
 
 def make_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -132,37 +145,24 @@ def teacher_signup():
         if pw != pw2:
             return render_template("teacher_signup.html", error="비밀번호가 서로 다릅니다.")
 
-        d = load_data()
-        if username in d["teachers"]:
+        # 1) 서버에서 비밀번호를 해시로 변환(비번 원문을 저장하지 않기)
+        pw_hash = generate_password_hash(pw)
+
+        # 2) Google Sheets(Teachers 탭)에 저장 요청
+        try:
+            resp = post_to_sheet({
+                "action": "teacher_signup",
+                "username": username,
+                "pw_hash": pw_hash
+            })
+        except Exception:
+            return render_template("teacher_signup.html", error="회원가입 저장 실패(서버 통신 오류).")
+
+        status = resp.get("status")
+        if status == "exists":
             return render_template("teacher_signup.html", error="이미 존재하는 아이디입니다.")
+        if statu
 
-        d["teachers"][username] = pw
-        save_data(d)
-        return redirect("/teacher/login")
-
-    return render_template("teacher_signup.html")
-
-# ---------- 교사 로그인 ----------
-@app.route("/teacher/login", methods=["GET", "POST"])
-def teacher_login():
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        pw = request.form.get("password", "")
-
-        d = load_data()
-        if d["teachers"].get(username) == pw:
-            session.clear()
-            session["teacher"] = username
-            return redirect("/teacher/dashboard")
-        return render_template("teacher_login.html", error="로그인 실패")
-
-    return render_template("teacher_login.html")
-
-# ---------- 로그아웃 ----------
-@app.route("/teacher/logout")
-def teacher_logout():
-    session.clear()
-    return redirect("/")
 
 # ---------- 교사 대시보드 ----------
 @app.route("/teacher/dashboard")
@@ -502,6 +502,42 @@ def student_write():
             placements_obj = json.loads(placements_json) if placements_json else {}
         except Exception:
             placements_obj = {}
+
+        # --- (추가) 구글 시트에 결과 저장 ---
+try:
+    ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
+    resp = post_to_sheet({
+        "action": "result_append",
+        "teacher": cls.get("teacher", ""),   # 이 반을 만든 교사 아이디
+        "class_code": code,
+        "student": name,
+        "session": sid,
+        "placements": placements_obj,
+        "ip": ip_addr
+    })
+    if resp.get("status") != "ok":
+        # secret이 틀리거나(blocked) 시트 문제 등
+        return render_template(
+            "student_write.html",
+            name=name,
+            student_session=ssession,
+            sid=sid,
+            session_meta=cls.get("sessions", {}).get(sid, {}),
+            friends=friends,
+            placements=placements_obj,
+            error="저장에 실패했습니다(구글 시트). 잠시 후 다시 제출해 주세요."
+        )
+except Exception:
+    return render_template(
+        "student_write.html",
+        name=name,
+        student_session=ssession,
+        sid=sid,
+        session_meta=cls.get("sessions", {}).get(sid, {}),
+        friends=friends,
+        placements=placements_obj,
+        error="저장에 실패했습니다(서버 통신 오류). 잠시 후 다시 제출해 주세요."
+    )
 
         # 저장 포맷: {"친구이름": {"x": int, "y": int, "d": float}}
         ssession["placements"] = placements_obj
