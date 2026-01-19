@@ -132,6 +132,17 @@ def teacher_login():
 
     return render_template("teacher_login.html")
 
+# ---------- 임시디버그 ----------
+import hashlib
+
+@app.route("/debug/secret")
+def debug_secret():
+    s = GOOGLE_SECRET or ""
+    return {
+        "len": len(s),
+        "sha256_8": hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+    }
+
 # ---------- 로그아웃 ----------
 @app.route("/teacher/logout")
 def teacher_logout():
