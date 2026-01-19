@@ -17,7 +17,7 @@ app.secret_key = "secret-key"
 SITE_TITLE = "내가 바라본 우리 반"
 DATA_FILE = "data.json"
 
-# ---------- 데이터 ----------
+# ---------- 데이터 -----------
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {"teachers": {}, "classes": {}}
