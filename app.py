@@ -66,6 +66,58 @@ def init_db():
         );
         """))
 
+def db_create_class(teacher_username: str, class_code: str, class_name: str, students: list[dict]):
+    """
+    classes, students 테이블에 학급/학생 저장
+    students: [{"no": "1", "name": "홍길동"}, ...]
+    """
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO classes (code, name, teacher_username)
+            VALUES (:code, :name, :teacher_username)
+        """), {
+            "code": class_code,
+            "name": class_name,
+            "teacher_username": teacher_username,
+        })
+
+        for s in students:
+            conn.execute(text("""
+                INSERT INTO students (class_code, student_no, name)
+                VALUES (:class_code, :student_no, :name)
+            """), {
+                "class_code": class_code,
+                "student_no": str(s.get("no", "")),
+                "name": (s.get("name") or "").strip(),
+            })
+
+
+def db_list_classes_for_teacher(teacher_username: str) -> dict:
+    """
+    대시보드용: 교사 계정이 가진 학급 목록을 dict로 반환
+    기존 dashboard.html이 기대하는 구조를 최대한 맞춰줌:
+    {code: {"name": ..., "teacher": ...}, ...}
+    """
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT code, name, teacher_username
+            FROM classes
+            WHERE teacher_username = :t
+            ORDER BY id DESC
+        """), {"t": teacher_username}).fetchall()
+
+    out = {}
+    for r in rows:
+        out[r.code] = {"name": r.name, "teacher": r.teacher_username}
+    return out
+
+
 # 서버 시작 시 DB 테이블 자동 생성
 init_db()
 
@@ -321,9 +373,8 @@ def teacher_logout():
 def dashboard():
     if "teacher" not in session:
         return redirect("/teacher/login")
+        classes = db_list_classes_for_teacher(session["teacher"])
 
-    d = load_data()
-    classes = {c: v for c, v in d["classes"].items() if v["teacher"] == session["teacher"]}
 
     # (추가) 현재 선택 학급이 없으면, 첫 번째 학급을 자동 선택해서 상단바가 뜨게 함
     if classes and not session.get("selected_class"):
@@ -358,17 +409,19 @@ def create_class():
             parsed.append({"no": str(auto_no), "name": name})
             auto_no += 1
 
-        cls = {
-            "name": class_name or f"학급 {code}",
-            "teacher": session["teacher"],
-            "students": parsed,
-            "students_data": {
-                s["name"]: {"sessions": {}} for s in parsed
-            },
-        }
-        d.setdefault("classes", {})[code] = ensure_class_schema(cls)
-        save_data_safely(d)
+        # DB에 학급 생성 저장
+        db_create_class(
+            teacher_username=session["teacher"],
+            class_code=code,
+            class_name=class_name or f"학급 {code}",
+            students=parsed,
+        )
+
+        # 대시보드 상단바 표시용으로 "선택 학급"도 세션에 넣어두기
+        session["selected_class"] = code
+
         return redirect("/teacher/dashboard")
+
 
     return render_template("create_class.html")
 
