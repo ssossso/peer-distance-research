@@ -395,8 +395,21 @@ def teacher_logout():
 def dashboard():
     if "teacher" not in session:
         return redirect("/teacher/login")
-        classes = db_list_classes_for_teacher(session["teacher"])
 
+    # ✅ classes는 무조건 먼저 만들어 둠(빈 dict라도)
+    classes = {}
+
+    # ✅ DB가 있으면 DB에서 읽기, DB가 없거나 실패하면 JSON로 fallback
+    try:
+        if engine:
+            classes = db_list_classes_for_teacher(session["teacher"])
+        else:
+            d = load_data()
+            classes = {c: v for c, v in d.get("classes", {}).items() if v.get("teacher") == session["teacher"]}
+    except Exception as e:
+        # 서비스가 죽지 않게 fallback
+        d = load_data()
+        classes = {c: v for c, v in d.get("classes", {}).items() if v.get("teacher") == session["teacher"]}
 
     # (추가) 현재 선택 학급이 없으면, 첫 번째 학급을 자동 선택해서 상단바가 뜨게 함
     if classes and not session.get("selected_class"):
@@ -404,6 +417,7 @@ def dashboard():
         session["selected_class"] = first_code
 
     return render_template("dashboard.html", classes=classes)
+
 
 # ---------- 학급 생성 ----------
 @app.route("/teacher/create", methods=["GET", "POST"])
