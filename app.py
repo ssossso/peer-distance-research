@@ -117,6 +117,22 @@ def db_list_classes_for_teacher(teacher_username: str) -> dict:
         out[r.code] = {"name": r.name, "teacher": r.teacher_username}
     return out
 
+def db_get_class_name(class_code: str):
+    if not engine:
+        return None
+
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT name
+            FROM classes
+            WHERE code = :code
+            LIMIT 1
+        """), {"code": class_code}).fetchone()
+
+    return row.name if row else None
+
+
+
 def db_get_class_for_teacher(class_code: str, teacher_username: str):
     """
     교사 권한 확인 포함해서 학급 1개 가져오기
@@ -350,7 +366,6 @@ def get_current_class():
     - 교사: session['selected_class']가 있으면 그 학급
     - 학생: session['code']가 있으면 그 학급
     """
-    d = load_data()
     code = None
 
     if "teacher" in session and session.get("selected_class"):
@@ -361,11 +376,20 @@ def get_current_class():
     if not code:
         return None
 
+    # ✅ DB 우선
+    if engine:
+        name = db_get_class_name(code)
+        if not name:
+            return None
+        return {"name": name, "code": code}
+
+    # (예외) DB 없을 때만 JSON
+    d = load_data()
     cls = d.get("classes", {}).get(code)
     if not cls:
         return None
-
     return {"name": cls.get("name", ""), "code": code}
+
 
 
 @app.context_processor
@@ -722,19 +746,44 @@ def student_enter_session(code, sid):
 
 @app.route("/qr/<code>/<sid>.png")
 def qr_session_link(code, sid):
-    """
-    회차별 학생 입장 링크를 QR 코드(PNG)로 제공합니다.
-    QR에는 절대 URL(/s/<code>/<sid>)이 들어갑니다.
-    """
-    d = load_data()
-    cls = d.get("classes", {}).get(code)
-    if not cls:
-        return "학급을 찾을 수 없습니다.", 404
-
-    cls = ensure_class_schema(cls)
+    code = (code or "").upper().strip()
     sid = str(sid).strip()
-    if sid not in cls.get("sessions", {}):
-        return "회차를 찾을 수 없습니다.", 404
+    if sid not in ["1", "2", "3", "4", "5"]:
+        sid = "1"
+
+    # ✅ DB 우선: 학급 존재만 확인하면 됨
+    if engine:
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT 1 FROM classes WHERE code = :code LIMIT 1
+            """), {"code": code}).fetchone()
+        if not row:
+            return "학급을 찾을 수 없습니다.", 404
+    else:
+        # (예외) DB 없을 때만 JSON 확인
+        d = load_data()
+        cls = d.get("classes", {}).get(code)
+        if not cls:
+            return "학급을 찾을 수 없습니다.", 404
+        cls = ensure_class_schema(cls)
+
+    base = request.url_root.rstrip("/")
+    target = f"{base}/s/{code}/{sid}"
+
+    try:
+        import qrcode
+    except ModuleNotFoundError:
+        return "QR 코드 생성을 위해 qrcode 라이브러리가 필요합니다.", 500
+
+    img = qrcode.make(target)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    resp = send_file(buf, mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
 
     base = request.url_root.rstrip("/")
     target = f"{base}/s/{code}/{sid}"
