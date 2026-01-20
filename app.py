@@ -219,6 +219,12 @@ def dashboard():
 
     d = load_data()
     classes = {c: v for c, v in d["classes"].items() if v["teacher"] == session["teacher"]}
+
+    # (추가) 현재 선택 학급이 없으면, 첫 번째 학급을 자동 선택해서 상단바가 뜨게 함
+    if classes and not session.get("selected_class"):
+        first_code = next(iter(classes.keys()))
+        session["selected_class"] = first_code
+
     return render_template("dashboard.html", classes=classes)
 
 # ---------- 학급 생성 ----------
