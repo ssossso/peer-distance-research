@@ -238,6 +238,7 @@
     let offsetX = 0, offsetY = 0;
     let originParent = null;
     let didDrop = false;
+    let activePointerId = null;
 
     function resetChipStyles(chip){
       chip.style.position = '';
@@ -255,6 +256,14 @@
     function cleanup(){
       if (!draggingChip) return;
 
+      // 전역 리스너 제거
+      window.removeEventListener('pointermove', onMove, { passive: false });
+      window.removeEventListener('pointerup', onUp, { passive: false });
+      window.removeEventListener('pointercancel', onCancel);
+
+      // 포인터 캡처 해제 시도
+      try { friendList.releasePointerCapture(activePointerId); } catch (e) {}
+
       if (!didDrop){
         // 원래 자리로 복귀
         resetChipStyles(draggingChip);
@@ -263,7 +272,7 @@
           placeholder.remove();
         }
       } else {
-        // 성공적으로 배치되면 placeholder 제거
+        // 성공 배치면 placeholder만 제거
         placeholder?.remove();
       }
 
@@ -271,6 +280,7 @@
       originParent = null;
       draggingChip = null;
       didDrop = false;
+      activePointerId = null;
     }
 
     function placeTokenFromChip(chip, clientX, clientY){
@@ -278,11 +288,10 @@
       const c = canvas.getBoundingClientRect();
       const token = makeToken(name);
 
-      // 드롭 위치를 캔버스 좌표로 변환 (칩 내부에서 잡은 오프셋 반영)
+      // drop 위치를 캔버스 좌표로 변환(오프셋 반영)
       let x = clientX - c.left - offsetX;
       let y = clientY - c.top - offsetY;
 
-      // edge_margin 유지
       x = clamp(x, EDGE_MARGIN, c.width - token.offsetWidth - EDGE_MARGIN);
       y = clamp(y, EDGE_MARGIN, c.height - token.offsetHeight - EDGE_MARGIN);
 
@@ -293,10 +302,9 @@
       syncPlacements();
     }
 
-    // 캔버스에 이미 놓인 친구는 목록에서 다시 생성할 수 있도록
+    // 캔버스 위 토큰에서 "↩" 눌렀을 때 목록으로 돌려보내기
     function addChipBack(name){
       if (READONLY) return;
-
       const exists = Array.from(friendList.querySelectorAll('.chip')).some(c => c.dataset.name === name);
       if (exists) return;
 
@@ -315,7 +323,7 @@
       chip.style.touchAction = 'none';
       chip.textContent = name;
 
-      // 원래 친구 순서(friends 배열)를 기준으로 정렬 삽입
+      // friends 배열 순서 기준으로 삽입
       const chips = Array.from(friendList.querySelectorAll('.chip'));
       const myIdx = friends.indexOf(name);
       let inserted = false;
@@ -330,8 +338,35 @@
       if (!inserted) friendList.appendChild(chip);
     }
 
-    // makeToken에서 쓰도록 전역에 노출
+    // makeToken에서 호출할 수 있도록 노출
     window.addChipBack = addChipBack;
+
+    function onMove(e){
+      if (!draggingChip) return;
+      draggingChip.style.left = (e.clientX - offsetX) + 'px';
+      draggingChip.style.top = (e.clientY - offsetY) + 'px';
+      e.preventDefault();
+    }
+
+    function onUp(e){
+      if (!draggingChip) return;
+
+      const c = canvas.getBoundingClientRect();
+      const inCanvas = (e.clientX >= c.left && e.clientX <= c.right && e.clientY >= c.top && e.clientY <= c.bottom);
+
+      if (inCanvas){
+        placeTokenFromChip(draggingChip, e.clientX, e.clientY);
+        draggingChip.remove();
+        didDrop = true;
+      }
+
+      cleanup();
+      e.preventDefault();
+    }
+
+    function onCancel(){
+      cleanup();
+    }
 
     friendList.addEventListener('pointerdown', (e) => {
       if (READONLY) return;
@@ -340,8 +375,8 @@
 
       draggingChip = chip;
       didDrop = false;
+      activePointerId = e.pointerId;
 
-      chip.setPointerCapture?.(e.pointerId);
       const r = chip.getBoundingClientRect();
       offsetX = e.clientX - r.left;
       offsetY = e.clientY - r.top;
@@ -356,7 +391,7 @@
       placeholder.style.background = '#ffffff';
       originParent.insertBefore(placeholder, chip);
 
-      // 칩 자신을 fixed로 이동하(포인터 추종)
+      // 칩을 fixed로 이동
       chip.style.position = 'fixed';
       chip.style.left = (e.clientX - offsetX) + 'px';
       chip.style.top = (e.clientY - offsetY) + 'px';
@@ -368,33 +403,15 @@
       chip.style.transform = 'translateZ(0)';
       document.body.appendChild(chip);
 
+      // 포인터 캡처는 friendList가 잡고, 이동/업은 window가 받게 한다 (핵심)
+      try { friendList.setPointerCapture(e.pointerId); } catch (err) {}
+
+      window.addEventListener('pointermove', onMove, { passive: false });
+      window.addEventListener('pointerup', onUp, { passive: false });
+      window.addEventListener('pointercancel', onCancel);
+
       e.preventDefault();
     });
-
-    friendList.addEventListener('pointermove', (e) => {
-      if (!draggingChip) return;
-      draggingChip.style.left = (e.clientX - offsetX) + 'px';
-      draggingChip.style.top = (e.clientY - offsetY) + 'px';
-      e.preventDefault();
-    });
-
-    friendList.addEventListener('pointerup', (e) => {
-      if (!draggingChip) return;
-
-      const c = canvas.getBoundingClientRect();
-      const inCanvas = (e.clientX >= c.left && e.clientX <= c.right && e.clientY >= c.top && e.clientY <= c.bottom);
-
-      if (inCanvas){
-        placeTokenFromChip(draggingChip, e.clientX, e.clientY);
-        draggingChip.remove();
-        didDrop = true;
-      }
-
-      cleanup();
-      e.preventDefault();
-    });
-
-    friendList.addEventListener('pointercancel', cleanup);
   }
 
   // makeToken에서 호출할 수 있도록(토큰 -> 목록 되돌리기)
@@ -407,4 +424,3 @@
     setTimeout(restoreInitial, 0);
   });
 </script>
-{% endblock %}
