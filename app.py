@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, request, redirect, session, send_file
@@ -12,10 +11,8 @@ import sys
 import subprocess
 
 DATABASE_URL = (os.environ.get("DATABASE_URL") or "").strip()
-
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
 
 engine = None
 SessionLocal = None
@@ -24,8 +21,56 @@ if DATABASE_URL:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
 
+def init_db():
+    if not engine:
+        return
+
+    # engine.begin(): 중간에 문제가 생기면 자동으로 롤백(되돌림)됨
+    with engine.begin() as conn:
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS teachers (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        """))
+
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS classes (
+            id SERIAL PRIMARY KEY,
+            code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            teacher_username TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        """))
+
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS students (
+            id SERIAL PRIMARY KEY,
+            class_code TEXT NOT NULL,
+            student_no TEXT,
+            name TEXT NOT NULL
+        );
+        """))
+
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS student_sessions (
+            id SERIAL PRIMARY KEY,
+            class_code TEXT NOT NULL,
+            student_name TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            placements JSONB,
+            submitted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        """))
+
+# 서버 시작 시 DB 테이블 자동 생성
+init_db()
 
 app = Flask(__name__)
+
 
 # Render 환경변수에 SECRET_KEY를 넣고 고정해야 배포해도 로그인 유지가 됩니다.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
