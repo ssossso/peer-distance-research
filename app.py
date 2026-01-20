@@ -900,7 +900,12 @@ def student_write():
         })
 
         students = db_get_students_in_class(code)
+        cls["students"] = students
+
         all_names = [s["name"] for s in students]
+
+        # ✅ DB 모드에서도 템플릿/공통코드가 쓰는 students_data를 만들어 둠
+        cls["students_data"] = {n: {"sessions": {}} for n in all_names}
 
         if name not in all_names:
             return redirect("/student")
@@ -922,6 +927,7 @@ def student_write():
 
 
 
+
     else:
         d = load_data()
         cls = ensure_class_schema(d.get("classes", {}).get(code))
@@ -934,15 +940,20 @@ def student_write():
         friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
 
 
-    student = cls["students_data"][name]
+    # ✅ DB 모드에서는 위에서 ssession / friends / placements를 이미 만들었음
+    if not engine:
+        student = cls["students_data"][name]
 
-    # (중요) 학생 세션(sessions) 보정 + sid 기본값 생성
-    student.setdefault("sessions", {})
-    student["sessions"].setdefault(sid, {"placements": {}, "submitted": False})
-    ssession = student["sessions"][sid]
+        student.setdefault("sessions", {})
+        student["sessions"].setdefault(sid, {"placements": {}, "submitted": False})
+        ssession = student["sessions"][sid]
 
-    friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
-    placements = (ssession.get("placements") or {})
+        friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
+        placements = (ssession.get("placements") or {})
+    else:
+        # DB 모드: 이미 위에서 계산한 값 사용
+        placements = (ssession.get("placements") or {})
+
 
     if request.method == "POST":
         # 제출 완료면 막기 (✅ DB 우선)
@@ -1003,16 +1014,6 @@ def student_write():
 
         return redirect("/student/submitted")
 
-        return render_template(
-            "student_write.html",
-            name=name,
-            friends=friends,
-            placements=placements,
-            student_session=ssession,
-            sid=sid,
-            session_meta=cls.get("sessions", {}).get(sid, {}),
-        )
-    
 
     return render_template(
         "student_write.html",
