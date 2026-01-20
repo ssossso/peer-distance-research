@@ -1,5 +1,6 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, request, redirect, session, send_file
@@ -10,7 +11,11 @@ import io
 import sys
 import subprocess
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = (os.environ.get("DATABASE_URL") or "").strip()
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 
 engine = None
 SessionLocal = None
@@ -37,8 +42,7 @@ def make_session_permanent():
 
 SITE_TITLE = "내가 바라본 우리 반"
 # Render Persistent Disk 경로 사용 (기본값: /var/data/data.json)
-DATA_FILE = os.environ.get("DATA_FILE", "/var/data/data.json")
-
+DATA_FILE = os.environ.get("DATA_FILE", "data.json")
 
 # --- Google Sheets 연동 ---
 GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyjKC2JearJnySkxdG0oahMkMJ5V6uBqY5EYRGVVRa8KWZvRzHcskeVNY5hnlyiSw/exec"
@@ -162,7 +166,7 @@ def debug_db():
 
     try:
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         return "DB connection OK"
     except Exception as e:
         return f"DB connection failed: {e}", 500
