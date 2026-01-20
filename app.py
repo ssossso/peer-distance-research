@@ -147,6 +147,7 @@ SITE_TITLE = "내가 바라본 우리 반"
 # Render Persistent Disk 경로 사용 (기본값: /var/data/data.json)
 DATA_FILE = os.environ.get("DATA_FILE", "data.json")
 
+
 # --- Google Sheets 연동 ---
 GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyjKC2JearJnySkxdG0oahMkMJ5V6uBqY5EYRGVVRa8KWZvRzHcskeVNY5hnlyiSw/exec"
 GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "").strip()
@@ -189,16 +190,25 @@ def post_to_sheet(payload: dict) -> dict:
 
 # ---------- 데이터 ----------
 def load_data():
+    # 파일이 없으면 빈 데이터
     if not os.path.exists(DATA_FILE):
         return {"classes": {}}
 
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        d = json.load(f)
+    # 파일이 있어도, JSON이 깨져 있으면 앱이 죽지 않게 방어
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+    except Exception:
+        # 깨진 파일이면 일단 비워서라도 서비스가 살아있게 함
+        return {"classes": {}}
 
+    # 데이터 구조 안전 보정
+    d.setdefault("classes", {})
     for code, cls in d.get("classes", {}).items():
         d["classes"][code] = ensure_class_schema(cls)
 
     return d
+
 
 def save_data(data):
     # /var/data 같은 경로는 폴더가 없을 수 있으니 먼저 생성
