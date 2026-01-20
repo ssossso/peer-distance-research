@@ -41,11 +41,12 @@
       </div>
 
       <!-- 친구 목록 -->
-      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#ffffff; height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
+      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd; height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
         <div style="font-weight:800; margin-bottom:10px;">친구 목록</div>
-        <div id="friendList" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start; overflow:hidden; flex:1;">
+        <div id="friendList" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start; flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable;">
+
           {% for f in friends %}
-            <div class="chip" data-name="{{ f }}" style="user-select:none; cursor:grab; padding:8px 6px; border-radius:10px; border:1px solid #c7d2fe; background:#eef2ff; font-weight:800; font-size:12.5px; text-align:center; touch-action:none;">
+          <div class="chip" data-name="{{ f }}" style="user-select:none; cursor:grab; padding:8px 6px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff; font-weight:800; font-size:12.5px; text-align:center; touch-action:none;"> 
               {{ f }}
             </div>
           {% endfor %}
@@ -301,8 +302,8 @@ el.addEventListener('pointerdown', (e) => {
       chip.style.cursor = 'grab';
       chip.style.padding = '8px 6px';
       chip.style.borderRadius = '10px';
-      chip.style.border = '1px solid #c7d2fe';
-      chip.style.background = '#eef2ff';
+      chip.style.border = '1px solid #d1d5db';
+      chip.style.background = '#ffffff';
       chip.style.fontWeight = '800';
       chip.style.fontSize = '12.5px';
       chip.style.textAlign = 'center';
@@ -369,6 +370,7 @@ el.addEventListener('pointerdown', (e) => {
       placeholder = document.createElement('div');
       placeholder.style.width = r.width + 'px';
       placeholder.style.height = r.height + 'px';
+      placeholder.style.boxSizing = 'border-box';
       placeholder.style.borderRadius = '10px';
       placeholder.style.border = '1px dashed #e5e7eb';
       placeholder.style.background = '#ffffff';
