@@ -17,6 +17,9 @@ DATA_FILE = "data.json"
 GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyjKC2JearJnySkxdG0oahMkMJ5V6uBqY5EYRGVVRa8KWZvRzHcskeVNY5hnlyiSw/exec"
 GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "").strip()
 
+DEBUG_MODE = os.environ.get("DEBUG_MODE") == "1"
+
+
 # ---------- Google Sheets POST ----------
 def post_to_sheet(payload: dict) -> dict:
     payload = dict(payload)
@@ -186,24 +189,25 @@ def teacher_login():
 
     return render_template("teacher_login.html")
 
-# ---------- 임시디버그 ----------
-import hashlib
-
-@app.route("/debug/secret")
-def debug_secret():
-    s = GOOGLE_SECRET or ""
-    return {
-        "len": len(s),
-        "sha256_8": hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
-    }
-@app.route("/debug/sheets")
-def debug_sheets():
+# ---------- 임시디버그(스위치로 ON/OFF) ----------
+if DEBUG_MODE:
     import hashlib
-    return {
-        "webapp_url": GOOGLE_WEBAPP_URL,
-        "secret_len": len(GOOGLE_SECRET or ""),
-        "secret_sha256_8": hashlib.sha256((GOOGLE_SECRET or "").encode("utf-8")).hexdigest()[:8],
-    }
+
+    @app.route("/debug/secret")
+    def debug_secret():
+        s = GOOGLE_SECRET or ""
+        return {
+            "len": len(s),
+            "sha256_8": hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+        }
+
+    @app.route("/debug/sheets")
+    def debug_sheets():
+        return {
+            "webapp_url": GOOGLE_WEBAPP_URL,
+            "secret_len": len(GOOGLE_SECRET or ""),
+            "secret_sha256_8": hashlib.sha256((GOOGLE_SECRET or "").encode("utf-8")).hexdigest()[:8],
+        }
 
 # ---------- 로그아웃 ----------
 @app.route("/teacher/logout")
