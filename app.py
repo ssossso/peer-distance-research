@@ -440,29 +440,54 @@ def student_write():
     d = load_data()
     code = session["code"]
     name = session["name"]
-    cls = d["classes"][code]
-    sid = session.get("sid", "1")
+
+    # (중요) 학급 스키마 보정
+    cls = ensure_class_schema(d.get("classes", {}).get(code))
+    if not cls:
+        return redirect("/student")
+
+    # 학생 존재 확인
+    if name not in (cls.get("students_data") or {}):
+        return redirect("/student")
+
+    # 회차(sid) 안전 처리
+    sid = (session.get("sid") or "1").strip()
+    if sid not in cls.get("sessions", {}):
+        sid = "1"
+        session["sid"] = sid
 
     student = cls["students_data"][name]
+
+    # (중요) 학생 세션(sessions) 보정 + sid 기본값 생성
+    student.setdefault("sessions", {})
+    student["sessions"].setdefault(sid, {"placements": {}, "submitted": False})
     ssession = student["sessions"][sid]
 
-    friends = [s["name"] for s in cls["students"] if s["name"] != name]
-    placements = ssession.get("placements", {})
+    friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
+    placements = (ssession.get("placements") or {})
 
     if request.method == "POST":
-        placements_obj = json.loads(request.form.get("placements_json", "{}"))
+        # 제출 완료면 막기
+        if ssession.get("submitted"):
+            return redirect("/student/submitted")
 
+        placements_json = (request.form.get("placements_json") or "{}").strip()
+        try:
+            placements_obj = json.loads(placements_json) if placements_json else {}
+        except Exception:
+            placements_obj = {}
+
+        # 구글 시트 저장 + 성공 확인
         resp = post_to_sheet({
             "action": "result_append",
-            "teacher": cls["teacher"],
+            "teacher": cls.get("teacher", ""),
             "class_code": code,
             "student": name,
             "session": sid,
             "placements": placements_obj,
-            "ip": request.remote_addr
+            "ip": request.headers.get("X-Forwarded-For", request.remote_addr) or ""
         })
 
-        # 구글 시트 저장 실패 시 → 제출 처리하지 않음
         if resp.get("status") != "ok":
             return render_template(
                 "student_write.html",
@@ -471,13 +496,19 @@ def student_write():
                 friends=friends,
                 placements=placements_obj,
                 student_session=ssession,
-                sid=sid
+                sid=sid,
+                session_meta=cls.get("sessions", {}).get(sid, {}),
             )
 
-
+        # 로컬에도 저장
         ssession["placements"] = placements_obj
         ssession["submitted"] = True
+        student["sessions"][sid] = ssession
+
+        # cls를 다시 d에 넣고 안전 저장
+        d["classes"][code] = ensure_class_schema(cls)
         save_data_safely(d)
+
         return redirect("/student/submitted")
 
     return render_template(
@@ -486,7 +517,8 @@ def student_write():
         friends=friends,
         placements=placements,
         student_session=ssession,
-        sid=sid
+        sid=sid,
+        session_meta=cls.get("sessions", {}).get(sid, {}),
     )
 
 # ---------- 제출 완료 ----------
