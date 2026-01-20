@@ -66,6 +66,37 @@ def init_db():
         );
         """))
 
+def db_get_student_session(class_code: str, student_name: str, sid: str):
+    """
+    학생 1명의 특정 회차 세션 가져오기
+    return: {"placements": dict, "submitted": bool} 또는 None
+    """
+    if not engine:
+        return None
+
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT placements, submitted
+            FROM student_sessions
+            WHERE class_code = :code
+              AND student_name = :name
+              AND session_id = :sid
+            LIMIT 1
+        """), {
+            "code": class_code,
+            "name": student_name,
+            "sid": sid
+        }).fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "placements": row.placements or {},
+        "submitted": bool(row.submitted)
+    }
+
+
 def db_create_class(teacher_username: str, class_code: str, class_name: str, students: list[dict]):
     """
     classes, students 테이블에 학급/학생 저장
@@ -708,13 +739,61 @@ def student_enter_session(code, sid):
     code = (code or "").upper().strip()
     sid = (sid or "1").strip()
 
-    d = load_data()
-    cls = ensure_class_schema(d.get("classes", {}).get(code))
-    if not cls:
-        return "학급을 찾을 수 없습니다.", 404
+    # ✅ DB 우선: 학급 존재 확인 + 학생 명단 로드
+    if engine:
+        # 학급 존재 확인
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT code, name
+                FROM classes
+                WHERE code = :code
+                LIMIT 1
+            """), {"code": code}).fetchone()
+
+        if not row:
+            return "학급을 찾을 수 없습니다.", 404
+
+        # 화면용 sessions 메타(기존 템플릿 유지)
+        cls = ensure_class_schema({"code": code, "name": row.name, "sessions": {}})
+
+        # 학생 목록: DB에서 가져와서 students_data 형태로 맞춤
+        students = db_get_students_in_class(code)
+        cls["students"] = students
+        cls["students_data"] = {s["name"]: {"sessions": {}} for s in students}
+
+    else:
+        # (예외) DB 없을 때만 JSON
+    # ✅ DB 우선: 학급 존재 확인 + 학생 목록 로드
+    if engine:
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT code, name
+                FROM classes
+                WHERE code = :code
+                LIMIT 1
+            """), {"code": code}).fetchone()
+
+        if not row:
+            return "학급을 찾을 수 없습니다.", 404
+
+        # 화면용 sessions 메타 생성
+        cls = ensure_class_schema({"code": code, "name": row.name, "sessions": {}})
+
+        # DB 학생 목록 -> 템플릿이 쓰는 형태로 맞춤
+        students = db_get_students_in_class(code)
+        cls["students"] = students
+        cls["students_data"] = {s["name"]: {"sessions": {}} for s in students}
+
+    else:
+        # (예외) DB 없을 때만 JSON
+        d = load_data()
+        cls = ensure_class_schema(d.get("classes", {}).get(code))
+        if not cls:
+            return "학급을 찾을 수 없습니다.", 404
 
     if sid not in cls.get("sessions", {}):
         sid = "1"
+
 
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -785,24 +864,6 @@ def qr_session_link(code, sid):
     return resp
 
 
-    base = request.url_root.rstrip("/")
-    target = f"{base}/s/{code}/{sid}"
-
-    try:
-        import qrcode  # requirements.txt에 qrcode가 있으므로 보통 OK
-    except ModuleNotFoundError:
-        msg = "QR 코드 생성을 위해 qrcode 라이브러리가 필요합니다."
-        return msg, 500
-
-    img = qrcode.make(target)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-
-    resp = send_file(buf, mimetype="image/png")
-    resp.headers["Cache-Control"] = "public, max-age=86400"
-    return resp
-
 
 # ---------- 학생 입장 ----------
 @app.route("/student", methods=["GET", "POST"])
@@ -833,14 +894,61 @@ def student_write():
     code = session["code"]
     name = session["name"]
 
-    # (중요) 학급 스키마 보정
-    cls = ensure_class_schema(d.get("classes", {}).get(code))
-    if not cls:
-        return redirect("/student")
+    # ✅ DB 우선: 학급/학생 확인 + 친구목록 구성
+    if engine:
+        # 학급 존재 확인
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT code, name, teacher_username
+                FROM classes
+                WHERE code = :code
+                LIMIT 1
+            """), {"code": code}).fetchone()
 
-    # 학생 존재 확인
-    if name not in (cls.get("students_data") or {}):
-        return redirect("/student")
+        if not row:
+            return redirect("/student")
+
+        cls = ensure_class_schema({
+            "code": code,
+            "name": row.name,
+            "teacher": row.teacher_username,
+            "sessions": {}
+        })
+
+        students = db_get_students_in_class(code)
+        all_names = [s["name"] for s in students]
+
+        if name not in all_names:
+            return redirect("/student")
+
+        friends = [n for n in all_names if n != name]
+
+        # ✅ DB에서 학생 세션 복원
+        db_sess = db_get_student_session(code, name, sid)
+
+        if db_sess:
+            placements = db_sess.get("placements") or {}
+            ssession = {
+                "placements": placements,
+                "submitted": bool(db_sess.get("submitted"))
+            }
+        else:
+            placements = {}
+            ssession = {"placements": {}, "submitted": False}
+
+
+
+    else:
+        d = load_data()
+        cls = ensure_class_schema(d.get("classes", {}).get(code))
+        if not cls:
+            return redirect("/student")
+
+        if name not in (cls.get("students_data") or {}):
+            return redirect("/student")
+
+        friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
+
 
     # 회차(sid) 안전 처리
     sid = (session.get("sid") or "1").strip()
