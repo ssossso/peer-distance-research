@@ -26,8 +26,31 @@
   .subtitle { text-align:center; color:#666; font-size:14px; margin-bottom:5px; }
   textarea { width:100%; padding:10px; border-radius:8px; border:1px solid #ccc; font-size:14px; box-sizing:border-box; }
   input { padding:10px; border-radius:8px; border:1px solid #ccc; width:100%; box-sizing:border-box; }
-  button { padding:12px 20px; background:#4a6cf7; color:white; border:none; border-radius:8px; cursor:pointer; font-size:16px; font-weight:bold; }
-  button:hover { background:#3955c6; }
+  button {
+  padding:12px 20px;
+  background:#4a6cf7;
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:16px;
+  font-weight:bold;
+
+  /* 데스크탑/브라우저 기본 버튼 렌더링 차이 제거 */
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+button:hover { background:#3955c6; }
+
+/* 버튼이 focus 먹을 때 “커져 보이는” 기본 효과 제거 */
+button:focus,
+button:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
   ul { padding-left:0; list-style:none; }
   li { margin:8px 0; }
   .status { font-weight:bold; color:#4a6cf7; }
@@ -88,6 +111,14 @@
   button, a, .main-btn, .goto-btn, .pill {
     transition: none !important;
   }
+  /* 클릭/드래그 중 선택/강조로 “커져 보이는” 현상 방지(데스크탑 포함) */
+a:focus,
+a:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
 </style>
 
 </head>
