@@ -117,6 +117,69 @@ def db_list_classes_for_teacher(teacher_username: str) -> dict:
         out[r.code] = {"name": r.name, "teacher": r.teacher_username}
     return out
 
+def db_get_class_for_teacher(class_code: str, teacher_username: str):
+    """
+    교사 권한 확인 포함해서 학급 1개 가져오기
+    """
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT code, name, teacher_username
+            FROM classes
+            WHERE code = :code
+        """), {"code": class_code}).fetchone()
+
+    if not row:
+        return None
+    if row.teacher_username != teacher_username:
+        return "FORBIDDEN"
+
+    return {"code": row.code, "name": row.name, "teacher": row.teacher_username, "sessions": {}}
+
+
+def db_get_students_in_class(class_code: str):
+    """
+    학급의 학생 목록 가져오기 (번호 포함)
+    """
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT student_no, name
+            FROM students
+            WHERE class_code = :code
+            ORDER BY id ASC
+        """), {"code": class_code}).fetchall()
+
+    out = []
+    for r in rows:
+        out.append({"no": (r.student_no or ""), "name": r.name})
+    return out
+
+
+def db_get_submitted_map(class_code: str, sid: str):
+    """
+    해당 학급/회차에서 학생별 제출 여부 맵:
+    {"홍길동": True, "김철수": False, ...}
+    """
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT student_name, submitted
+            FROM student_sessions
+            WHERE class_code = :code AND session_id = :sid
+        """), {"code": class_code, "sid": sid}).fetchall()
+
+    m = {}
+    for r in rows:
+        m[r.student_name] = bool(r.submitted)
+    return m
+
 
 # 서버 시작 시 DB 테이블 자동 생성
 try:
@@ -266,6 +329,7 @@ def get_current_class():
         return None
 
     return {"name": cls.get("name", ""), "code": code}
+
 
 @app.context_processor
 def inject_globals():
@@ -467,21 +531,73 @@ def class_detail(code):
     if "teacher" not in session:
         return redirect("/teacher/login")
 
+    code = (code or "").upper().strip()
+
+    # 회차 선택(쿼리스트링 우선) - 기존 로직 유지
+    sid = (request.args.get("sid") or session.get("selected_session") or "1").strip()
+    if sid not in ["1", "2", "3", "4", "5"]:
+        sid = "1"
+    session["selected_session"] = sid
+
+    # ✅ DB가 있으면 DB에서 학급 조회
+    if engine:
+        cls = db_get_class_for_teacher(code, session["teacher"])
+        if cls == "FORBIDDEN":
+            return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+        if not cls:
+            return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+        # 세션 메타(기존 화면 유지용)
+        cls = ensure_class_schema(cls)
+
+        # 학생 목록
+        students = db_get_students_in_class(code)
+        cls["students"] = students
+
+        # 제출 상태 맵
+        submitted_map = db_get_submitted_map(code, sid)
+
+        # 상단바 표시용
+        session["selected_class"] = code
+
+        # 학생 목록 + 상태 (기존 템플릿이 기대하는 rows 형태 유지)
+        rows = []
+        for i, item in enumerate(students, start=1):
+            no = str(item.get("no", "") or i)
+            name = (item.get("name") or "").strip()
+            if not name:
+                continue
+
+            submitted = bool(submitted_map.get(name, False))
+            status = "완료" if submitted else "미완료"
+            rows.append({"no": no, "name": name, "status": status, "url_name": quote(name)})
+
+        # 회차 링크
+        session_links = []
+        for _sid, meta in sorted(cls.get("sessions", {}).items(), key=lambda x: int(x[0])):
+            session_links.append({
+                "sid": _sid,
+                "label": meta.get("label", f"{_sid}차"),
+                "url": f"/s/{code}/{_sid}",
+            })
+
+        return render_template(
+            "class_detail.html",
+            cls=cls,
+            code=code,
+            rows=rows,
+            sid=sid,
+            session_links=session_links,
+        )
+
+    # ✅ DB가 없으면(예외적) 기존 JSON 방식 fallback
     d = load_data()
     cls = ensure_class_schema(d.get("classes", {}).get(code))
     if not cls or cls.get("teacher") != session["teacher"]:
         return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
 
-    # 회차 선택(쿼리스트링 우선)
-    sid = (request.args.get("sid") or session.get("selected_session") or "1").strip()
-    if sid not in cls.get("sessions", {}):
-        sid = "1"
-    session["selected_session"] = sid
-
-    # 현재 선택 학급을 '유지'하기 위해 세션에 저장
     session["selected_class"] = code
 
-    # 학생 목록 + 상태
     rows = []
     for i, item in enumerate(cls.get("students", []), start=1):
         if isinstance(item, dict):
@@ -504,7 +620,6 @@ def class_detail(code):
         status = "완료" if submitted else "미완료"
         rows.append({"no": no, "name": name, "status": status, "url_name": quote(name)})
 
-    # 회차 링크(학생은 회차 선택 없이 링크로 들어옴)
     session_links = []
     for _sid, meta in sorted(cls.get("sessions", {}).items(), key=lambda x: int(x[0])):
         session_links.append({
@@ -521,6 +636,7 @@ def class_detail(code):
         sid=sid,
         session_links=session_links,
     )
+
 
 @app.route("/s/<code>/<sid>", methods=["GET", "POST"])
 def student_enter_session(code, sid):
