@@ -856,39 +856,45 @@ def student_enter():
     if request.method == "POST":
         code = request.form.get("code", "").upper().strip()
         name = request.form.get("name", "").strip()
-        sid = "1"  # 기본 1차
 
-        if not code or not name:
-            return render_template("student_enter.html", error="학급 코드와 이름을 입력해 주세요.")
-
-        # ✅ DB 우선
+        # ✅ 1) DB 우선
         if engine:
+            # 학급 존재 확인
             with engine.connect() as conn:
-                c = conn.execute(text("""
-                    SELECT 1 FROM classes WHERE code = :code LIMIT 1
+                c_row = conn.execute(text("""
+                    SELECT code
+                    FROM classes
+                    WHERE code = :code
+                    LIMIT 1
                 """), {"code": code}).fetchone()
 
-                if not c:
-                    return render_template("student_enter.html", error="학급을 찾을 수 없습니다.")
+            if not c_row:
+                return render_template("student_enter.html", error="입장 실패")
 
-                s = conn.execute(text("""
+            # 학생 존재 확인
+            with engine.connect() as conn:
+                s_row = conn.execute(text("""
                     SELECT 1
                     FROM students
                     WHERE class_code = :code AND name = :name
                     LIMIT 1
                 """), {"code": code, "name": name}).fetchone()
 
-                if not s:
-                    return render_template("student_enter.html", error="입장 실패 (명단에 없는 이름입니다.)")
+            if not s_row:
+                return render_template("student_enter.html", error="입장 실패")
 
+            # 세션 저장
             session["code"] = code
             session["name"] = name
-            session["sid"] = sid
+            session["sid"] = "1"
+
+            # 상단바 표시용(선택 학급/회차)
             session["selected_class"] = code
-            session["selected_session"] = sid
+            session["selected_session"] = "1"
+
             return redirect("/student/write")
 
-        # (예외) DB 없을 때만 JSON fallback
+        # ✅ 2) (예외) DB가 없으면 JSON 방식 fallback
         d = load_data()
         cls = d.get("classes", {}).get(code)
         if not cls or name not in (cls.get("students_data") or {}):
@@ -896,34 +902,36 @@ def student_enter():
 
         session["code"] = code
         session["name"] = name
-        session["sid"] = sid
+        session["sid"] = "1"
         session["selected_class"] = code
-        session["selected_session"] = sid
+        session["selected_session"] = "1"
         return redirect("/student/write")
 
     return render_template("student_enter.html")
 
 
+
 # ---------- 학생 글쓰기 ----------
+@app.route("/student/write", methods=["GET", "POST"])
 @app.route("/student/write", methods=["GET", "POST"])
 def student_write():
     if "code" not in session or "name" not in session:
         return redirect("/student")
 
-    d = load_data()
-    code = session["code"]
-    name = session["name"]
+    code = (session.get("code") or "").upper().strip()
+    name = (session.get("name") or "").strip()
 
-    # ✅ 먼저 sid를 만들고 시작해야 DB 조회에서 sid를 쓸 수 있음
+    # ✅ sid 먼저 확정 (DB 조회/저장에 필요)
     sid = (session.get("sid") or "1").strip()
     if sid not in ["1", "2", "3", "4", "5"]:
         sid = "1"
         session["sid"] = sid
 
-    
-    # ✅ DB 우선: 학급/학생 확인 + 친구목록 구성
+    # -----------------------------------------
+    # ✅ DB 우선
+    # -----------------------------------------
     if engine:
-        # 학급 존재 확인
+        # 1) 학급 존재 + teacher_username 확보
         with engine.connect() as conn:
             row = conn.execute(text("""
                 SELECT code, name, teacher_username
@@ -935,79 +943,123 @@ def student_write():
         if not row:
             return redirect("/student")
 
-        cls = ensure_class_schema({
-            "code": code,
-            "name": row.name,
-            "teacher": row.teacher_username,
-            "sessions": {}
-        })
-
+        # 2) 학생 목록 (친구 목록 구성)
         students = db_get_students_in_class(code)
-        cls["students"] = students
-
         all_names = [s["name"] for s in students]
-
-        # ✅ DB 모드에서도 템플릿/공통코드가 쓰는 students_data를 만들어 둠
-        cls["students_data"] = {n: {"sessions": {}} for n in all_names}
 
         if name not in all_names:
             return redirect("/student")
 
         friends = [n for n in all_names if n != name]
 
-        # ✅ DB에서 학생 세션 복원
+        # 3) 화면용 cls 구성 (템플릿 호환: sessions/meta 필요)
+        cls = ensure_class_schema({
+            "code": code,
+            "name": row.name,
+            "teacher": row.teacher_username,
+            "sessions": {}
+        })
+        cls["students"] = students
+
+        # ✅ 중요: 템플릿/기존 로직 호환을 위해 students_data 최소 구성
+        cls["students_data"] = {n: {"sessions": {}} for n in all_names}
+
+        # 4) DB에서 해당 학생/회차 세션 복원
         db_sess = db_get_student_session(code, name, sid)
+        placements = (db_sess.get("placements") if db_sess else {}) or {}
+        submitted = bool(db_sess.get("submitted")) if db_sess else False
 
-        if db_sess:
-            placements = db_sess.get("placements") or {}
-            ssession = {
-                "placements": placements,
-                "submitted": bool(db_sess.get("submitted"))
-            }
-        else:
-            placements = {}
-            ssession = {"placements": {}, "submitted": False}
+        # 5) 제출 완료면 GET에서도 바로 submitted 페이지로 보내고 싶으면 여기서 처리 가능(선택)
+        # if submitted:
+        #     return redirect("/student/submitted")
 
+        # -----------------------------------------
+        # POST 처리
+        # -----------------------------------------
+        if request.method == "POST":
+            # 제출 완료면 막기
+            if submitted:
+                return redirect("/student/submitted")
 
+            placements_json = (request.form.get("placements_json") or "{}").strip()
+            try:
+                placements_obj = json.loads(placements_json) if placements_json else {}
+            except Exception:
+                placements_obj = {}
 
+            # 구글 시트 저장(기존 유지)
+            resp = post_to_sheet({
+                "action": "result_append",
+                "teacher": row.teacher_username,
+                "class_code": code,
+                "student": name,
+                "session": sid,
+                "placements": placements_obj,
+                "ip": request.headers.get("X-Forwarded-For", request.remote_addr) or ""
+            })
 
-    else:
-        d = load_data()
-        cls = ensure_class_schema(d.get("classes", {}).get(code))
-        if not cls:
-            return redirect("/student")
+            if resp.get("status") != "ok":
+                return render_template(
+                    "student_write.html",
+                    error=f"저장 실패(구글 시트): {resp}",
+                    name=name,
+                    friends=friends,
+                    placements=placements_obj,
+                    student_session={"placements": placements_obj, "submitted": False},
+                    sid=sid,
+                    session_meta=cls.get("sessions", {}).get(sid, {}),
+                )
 
-        if name not in (cls.get("students_data") or {}):
-            return redirect("/student")
+            # ✅ DB 저장 (최종)
+            db_upsert_student_session(
+                class_code=code,
+                student_name=name,
+                sid=sid,
+                placements=placements_obj,
+                submitted=True
+            )
 
-        friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
+            return redirect("/student/submitted")
 
+        # -----------------------------------------
+        # GET 렌더
+        # -----------------------------------------
+        return render_template(
+            "student_write.html",
+            name=name,
+            friends=friends,
+            placements=placements,
+            student_session={"placements": placements, "submitted": submitted},
+            sid=sid,
+            session_meta=cls.get("sessions", {}).get(sid, {}),
+        )
 
-    # ✅ DB 모드에서는 위에서 ssession / friends / placements를 이미 만들었음
-    if not engine:
-        student = cls["students_data"][name]
+    # -----------------------------------------
+    # (예외) DB가 없을 때만 JSON fallback
+    # -----------------------------------------
+    d = load_data()
+    cls = ensure_class_schema(d.get("classes", {}).get(code))
+    if not cls:
+        return redirect("/student")
 
-        student.setdefault("sessions", {})
-        student["sessions"].setdefault(sid, {"placements": {}, "submitted": False})
-        ssession = student["sessions"][sid]
+    if name not in (cls.get("students_data") or {}):
+        return redirect("/student")
 
-        friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
-        placements = (ssession.get("placements") or {})
-    else:
-        # DB 모드: 이미 위에서 계산한 값 사용
-        placements = (ssession.get("placements") or {})
+    if sid not in cls.get("sessions", {}):
+        sid = "1"
+        session["sid"] = sid
 
+    student = cls["students_data"][name]
+    student.setdefault("sessions", {})
+    student["sessions"].setdefault(sid, {"placements": {}, "submitted": False})
+    ssession = student["sessions"][sid]
+
+    friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
+    placements = (ssession.get("placements") or {})
 
     if request.method == "POST":
-        # 제출 완료면 막기 (✅ DB 우선)
-        if engine:
-            submitted_map = db_get_submitted_map(code, sid)
-            if submitted_map.get(name, False):
-                return redirect("/student/submitted")
-        else:
-            if ssession.get("submitted"):
-                return redirect("/student/submitted")
-
+        if ssession.get("submitted"):
+            return redirect("/student/submitted")
 
         placements_json = (request.form.get("placements_json") or "{}").strip()
         try:
@@ -1015,7 +1067,6 @@ def student_write():
         except Exception:
             placements_obj = {}
 
-        # 구글 시트 저장 + 성공 확인
         resp = post_to_sheet({
             "action": "result_append",
             "teacher": cls.get("teacher", ""),
@@ -1038,25 +1089,13 @@ def student_write():
                 session_meta=cls.get("sessions", {}).get(sid, {}),
             )
 
-        # ✅ DB에 제출 저장 (배포해도 유지)
-        if engine:
-            db_upsert_student_session(
-                class_code=code,
-                student_name=name,
-                sid=sid,
-                placements=placements_obj,
-                submitted=True
-            )
-        else:
-            # (예외적) DB가 없을 때만 JSON fallback
-            ssession["placements"] = placements_obj
-            ssession["submitted"] = True
-            student["sessions"][sid] = ssession
-            d["classes"][code] = ensure_class_schema(cls)
-            save_data_safely(d)
+        ssession["placements"] = placements_obj
+        ssession["submitted"] = True
+        student["sessions"][sid] = ssession
+        d["classes"][code] = ensure_class_schema(cls)
+        save_data_safely(d)
 
         return redirect("/student/submitted")
-
 
     return render_template(
         "student_write.html",
@@ -1067,6 +1106,7 @@ def student_write():
         sid=sid,
         session_meta=cls.get("sessions", {}).get(sid, {}),
     )
+
 
 # ---------- 제출 완료 ----------
 @app.route("/student/submitted")
