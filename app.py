@@ -21,8 +21,34 @@ GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "").strip()
 def post_to_sheet(payload: dict) -> dict:
     payload = dict(payload)
     payload["secret"] = GOOGLE_SECRET
-    r = requests.post(GOOGLE_WEBAPP_URL, json=payload, timeout=10)
-    return r.json()
+
+    try:
+        r = requests.post(GOOGLE_WEBAPP_URL, json=payload, timeout=10)
+    except Exception as e:
+        # 네트워크 오류 등
+        return {
+            "status": "error",
+            "message": f"request failed: {e}"
+        }
+
+    # HTTP 에러 상태 코드
+    if r.status_code != 200:
+        return {
+            "status": "error",
+            "message": f"http {r.status_code}",
+            "text": r.text[:300]
+        }
+
+    # JSON 파싱 안전 처리
+    try:
+        return r.json()
+    except Exception:
+        return {
+            "status": "error",
+            "message": "invalid json response",
+            "text": r.text[:300]
+        }
+
 
 # ---------- 데이터 ----------
 def load_data():
