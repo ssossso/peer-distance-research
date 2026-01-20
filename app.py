@@ -199,6 +199,67 @@ def create_class():
 
     return render_template("create_class.html")
 
+# ---------- 학급 상세 ----------
+@app.route("/teacher/class/<code>")
+def class_detail(code):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    d = load_data()
+    cls = ensure_class_schema(d.get("classes", {}).get(code))
+    if not cls or cls.get("teacher") != session["teacher"]:
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+    # 회차 선택(쿼리스트링 우선)
+    sid = (request.args.get("sid") or session.get("selected_session") or "1").strip()
+    if sid not in cls.get("sessions", {}):
+        sid = "1"
+    session["selected_session"] = sid
+
+    # 현재 선택 학급을 '유지'하기 위해 세션에 저장
+    session["selected_class"] = code
+
+    # 학생 목록 + 상태
+    rows = []
+    for i, item in enumerate(cls.get("students", []), start=1):
+        if isinstance(item, dict):
+            no = str(item.get("no", "") or i)
+            name = (item.get("name") or "").strip()
+        else:
+            no = str(i)
+            name = (item or "").strip()
+
+        if not name:
+            continue
+
+        submitted = bool(
+            cls.get("students_data", {})
+              .get(name, {})
+              .get("sessions", {})
+              .get(sid, {})
+              .get("submitted", False)
+        )
+        status = "완료" if submitted else "미완료"
+        rows.append({"no": no, "name": name, "status": status, "url_name": quote(name)})
+
+    # 회차 링크(학생은 회차 선택 없이 링크로 들어옴)
+    session_links = []
+    for _sid, meta in sorted(cls.get("sessions", {}).items(), key=lambda x: int(x[0])):
+        session_links.append({
+            "sid": _sid,
+            "label": meta.get("label", f"{_sid}차"),
+            "url": f"/s/{code}/{_sid}",
+        })
+
+    return render_template(
+        "class_detail.html",
+        cls=cls,
+        code=code,
+        rows=rows,
+        sid=sid,
+        session_links=session_links,
+    )
+
 # ---------- 학생 입장 ----------
 @app.route("/student", methods=["GET", "POST"])
 def student_enter():
