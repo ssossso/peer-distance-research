@@ -2,16 +2,31 @@ import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, request, redirect, session, send_file
 import random, string, json, os
+from datetime import timedelta
 from urllib.parse import quote, unquote
 import io
 import sys
 import subprocess
 
 app = Flask(__name__)
-app.secret_key = "secret-key"
+
+# Render 환경변수에 SECRET_KEY를 넣고 고정해야 배포해도 로그인 유지가 됩니다.
+app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
+
+# 세션(로그인 상태)을 30일 유지
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
+
 
 SITE_TITLE = "내가 바라본 우리 반"
-DATA_FILE = "data.json"
+# Render Persistent Disk 경로 사용 (기본값: /var/data/data.json)
+DATA_FILE = os.environ.get("DATA_FILE", "/var/data/data.json")
+
 
 # --- Google Sheets 연동 ---
 GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyjKC2JearJnySkxdG0oahMkMJ5V6uBqY5EYRGVVRa8KWZvRzHcskeVNY5hnlyiSw/exec"
@@ -57,15 +72,27 @@ def post_to_sheet(payload: dict) -> dict:
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {"classes": {}}
+
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         d = json.load(f)
+
     for code, cls in d.get("classes", {}).items():
         d["classes"][code] = ensure_class_schema(cls)
+
     return d
 
 def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
+    # /var/data 같은 경로는 폴더가 없을 수 있으니 먼저 생성
+    parent_dir = os.path.dirname(DATA_FILE) or "."
+    os.makedirs(parent_dir, exist_ok=True)
+
+    # 안전 저장: tmp 파일에 먼저 쓰고 마지막에 교체
+    tmp_path = DATA_FILE + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+    os.replace(tmp_path, DATA_FILE)
+
 
 def save_data_safely(d):
     for code, cls in d.get("classes", {}).items():
