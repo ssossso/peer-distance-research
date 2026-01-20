@@ -85,6 +85,34 @@ def ensure_class_schema(cls):
             sdata["sessions"].setdefault(sid, {"placements": {}, "submitted": False})
     return cls
 
+def get_current_class():
+    """
+    상단바에 표시할 '현재 선택 학급'을 계산합니다.
+    - 교사: session['selected_class']가 있으면 그 학급
+    - 학생: session['code']가 있으면 그 학급
+    """
+    d = load_data()
+    code = None
+
+    if "teacher" in session and session.get("selected_class"):
+        code = session.get("selected_class")
+    elif session.get("code"):
+        code = session.get("code")
+
+    if not code:
+        return None
+
+    cls = d.get("classes", {}).get(code)
+    if not cls:
+        return None
+
+    return {"name": cls.get("name", ""), "code": code}
+
+@app.context_processor
+def inject_globals():
+    return {"current_class": get_current_class()}
+
+
 # ---------- 홈 ----------
 @app.route("/")
 def home():
@@ -294,6 +322,86 @@ def class_detail(code):
         session_links=session_links,
     )
 
+@app.route("/s/<code>/<sid>", methods=["GET", "POST"])
+def student_enter_session(code, sid):
+    """
+    교사가 회차별 링크(/s/<code>/<sid>)를 배포하면
+    학생은 회차 선택 없이 바로 해당 회차로 입장합니다.
+    """
+    code = (code or "").upper().strip()
+    sid = (sid or "1").strip()
+
+    d = load_data()
+    cls = ensure_class_schema(d.get("classes", {}).get(code))
+    if not cls:
+        return "학급을 찾을 수 없습니다.", 404
+
+    if sid not in cls.get("sessions", {}):
+        sid = "1"
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        if name not in cls.get("students_data", {}):
+            return render_template(
+                "student_enter_session.html",
+                error="학생 명단에 없는 이름입니다.",
+                code=code,
+                sid=sid,
+                session_label=cls.get("sessions", {}).get(sid, {}).get("label", f"{sid}차"),
+            )
+
+        session["code"] = code
+        session["name"] = name
+        session["sid"] = sid
+
+        # 상단바 표시용(선택 학급/회차)
+        session["selected_class"] = code
+        session["selected_session"] = sid
+
+        return redirect("/student/write")
+
+    return render_template(
+        "student_enter_session.html",
+        code=code,
+        sid=sid,
+        session_label=cls.get("sessions", {}).get(sid, {}).get("label", f"{sid}차"),
+    )
+
+@app.route("/qr/<code>/<sid>.png")
+def qr_session_link(code, sid):
+    """
+    회차별 학생 입장 링크를 QR 코드(PNG)로 제공합니다.
+    QR에는 절대 URL(/s/<code>/<sid>)이 들어갑니다.
+    """
+    d = load_data()
+    cls = d.get("classes", {}).get(code)
+    if not cls:
+        return "학급을 찾을 수 없습니다.", 404
+
+    cls = ensure_class_schema(cls)
+    sid = str(sid).strip()
+    if sid not in cls.get("sessions", {}):
+        return "회차를 찾을 수 없습니다.", 404
+
+    base = request.url_root.rstrip("/")
+    target = f"{base}/s/{code}/{sid}"
+
+    try:
+        import qrcode  # requirements.txt에 qrcode가 있으므로 보통 OK
+    except ModuleNotFoundError:
+        msg = "QR 코드 생성을 위해 qrcode 라이브러리가 필요합니다."
+        return msg, 500
+
+    img = qrcode.make(target)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    resp = send_file(buf, mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 # ---------- 학생 입장 ----------
 @app.route("/student", methods=["GET", "POST"])
 def student_enter():
@@ -334,18 +442,28 @@ def student_write():
     if request.method == "POST":
         placements_obj = json.loads(request.form.get("placements_json", "{}"))
 
-        try:
-            post_to_sheet({
-                "action": "result_append",
-                "teacher": cls["teacher"],
-                "class_code": code,
-                "student": name,
-                "session": sid,
-                "placements": placements_obj,
-                "ip": request.remote_addr
-            })
-        except Exception:
-            return render_template("student_write.html", error="저장 실패")
+        resp = post_to_sheet({
+            "action": "result_append",
+            "teacher": cls["teacher"],
+            "class_code": code,
+            "student": name,
+            "session": sid,
+            "placements": placements_obj,
+            "ip": request.remote_addr
+        })
+
+        # 구글 시트 저장 실패 시 → 제출 처리하지 않음
+        if resp.get("status") != "ok":
+            return render_template(
+                "student_write.html",
+                error=f"저장 실패(구글 시트): {resp}",
+                name=name,
+                friends=friends,
+                placements=placements_obj,
+                student_session=ssession,
+                sid=sid
+            )
+
 
         ssession["placements"] = placements_obj
         ssession["submitted"] = True
