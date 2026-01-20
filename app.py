@@ -1,3 +1,5 @@
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, request, redirect, session, send_file
@@ -7,6 +9,16 @@ from urllib.parse import quote, unquote
 import io
 import sys
 import subprocess
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+engine = None
+SessionLocal = None
+
+if DATABASE_URL:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    SessionLocal = sessionmaker(bind=engine)
+
 
 app = Flask(__name__)
 
@@ -141,6 +153,19 @@ def get_current_class():
 @app.context_processor
 def inject_globals():
     return {"current_class": get_current_class()}
+
+# ---------- DB 연결 테스트용 임시 라우트 ----------
+@app.route("/debug/db")
+def debug_db():
+    if not engine:
+        return "DATABASE_URL not set"
+
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        return "DB connection OK"
+    except Exception as e:
+        return f"DB connection failed: {e}", 500
 
 
 # ---------- 홈 ----------
