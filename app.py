@@ -119,10 +119,16 @@ def db_list_classes_for_teacher(teacher_username: str) -> dict:
 
 
 # 서버 시작 시 DB 테이블 자동 생성
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print("init_db failed:", e)
+
 
 app = Flask(__name__)
 
+# (진단용) Internal Server Error 원인을 화면/로그에 더 잘 보이게
+app.config["PROPAGATE_EXCEPTIONS"] = True
 
 # Render 환경변수에 SECRET_KEY를 넣고 고정해야 배포해도 로그인 유지가 됩니다.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
@@ -327,20 +333,26 @@ def teacher_login():
                 "action": "teacher_get",
                 "username": username
             })
-        except Exception:
-            return render_template("teacher_login.html", error="서버 통신 오류")
+        except Exception as e:
+            return render_template("teacher_login.html", error=f"서버 통신 오류: {e}")
 
-        if resp.get("status") != "ok":
-            return render_template("teacher_login.html", error="로그인 실패")
+        try:
+            if resp.get("status") != "ok":
+                return render_template("teacher_login.html", error=f"로그인 실패: {resp}")
 
-        if check_password_hash(resp.get("pw_hash", ""), pw):
-            session.clear()
-            session["teacher"] = username
-            return redirect("/teacher/dashboard")
+            pw_hash = resp.get("pw_hash") or ""
+            if check_password_hash(pw_hash, pw):
+                session.clear()
+                session["teacher"] = username
+                return redirect("/teacher/dashboard")
 
-        return render_template("teacher_login.html", error="로그인 실패")
+            return render_template("teacher_login.html", error="로그인 실패: 비밀번호 불일치")
+        except Exception as e:
+            # 여기서 터지면 어떤 값 때문에 터졌는지 노출
+            return render_template("teacher_login.html", error=f"로그인 처리 중 오류: {e} / resp={resp}")
 
     return render_template("teacher_login.html")
+
 
 # ---------- 임시디버그(스위치로 ON/OFF) ----------
 if DEBUG_MODE:
