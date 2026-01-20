@@ -65,6 +65,14 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         );
         """))
+        
+        conn.execute(text("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_students_class_name
+        ON students (class_code, name);
+        """))
+
+
+
 
 def db_get_student_session(class_code: str, student_name: str, sid: str):
     """
@@ -848,18 +856,53 @@ def student_enter():
     if request.method == "POST":
         code = request.form.get("code", "").upper().strip()
         name = request.form.get("name", "").strip()
+        sid = "1"  # 기본 1차
 
+        if not code or not name:
+            return render_template("student_enter.html", error="학급 코드와 이름을 입력해 주세요.")
+
+        # ✅ DB 우선
+        if engine:
+            with engine.connect() as conn:
+                c = conn.execute(text("""
+                    SELECT 1 FROM classes WHERE code = :code LIMIT 1
+                """), {"code": code}).fetchone()
+
+                if not c:
+                    return render_template("student_enter.html", error="학급을 찾을 수 없습니다.")
+
+                s = conn.execute(text("""
+                    SELECT 1
+                    FROM students
+                    WHERE class_code = :code AND name = :name
+                    LIMIT 1
+                """), {"code": code, "name": name}).fetchone()
+
+                if not s:
+                    return render_template("student_enter.html", error="입장 실패 (명단에 없는 이름입니다.)")
+
+            session["code"] = code
+            session["name"] = name
+            session["sid"] = sid
+            session["selected_class"] = code
+            session["selected_session"] = sid
+            return redirect("/student/write")
+
+        # (예외) DB 없을 때만 JSON fallback
         d = load_data()
         cls = d.get("classes", {}).get(code)
-        if not cls or name not in cls["students_data"]:
+        if not cls or name not in (cls.get("students_data") or {}):
             return render_template("student_enter.html", error="입장 실패")
 
         session["code"] = code
         session["name"] = name
-        session["sid"] = "1"
+        session["sid"] = sid
+        session["selected_class"] = code
+        session["selected_session"] = sid
         return redirect("/student/write")
 
     return render_template("student_enter.html")
+
 
 # ---------- 학생 글쓰기 ----------
 @app.route("/student/write", methods=["GET", "POST"])
