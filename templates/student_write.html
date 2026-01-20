@@ -96,7 +96,17 @@ function makeToken(name){
   const el = document.createElement('div');
   el.className = 'token';
   el.dataset.name = name;
-  ...
+
+  // 드래그로 움직이려면 left/top이 먹어야 하므로 absolute 필수
+  el.style.position = 'absolute';
+  el.style.left = '0px';
+  el.style.top = '0px';
+
+  // 모바일에서 스크롤/확대 같은 기본 동작이 끼어들지 않게
+  el.style.touchAction = 'none';
+  el.style.userSelect = 'none';
+  el.style.cursor = 'grab';
+
   el.textContent = name;
 
   if (!READONLY) attachDrag(el);
@@ -243,7 +253,7 @@ el.addEventListener('pointerdown', (e) => {
       window.removeEventListener('pointerup', onUp, { passive: false });
       window.removeEventListener('pointercancel', onCancel);
 
-      try { friendList.releasePointerCapture(activePointerId); } catch (e) {}
+      try { draggingChip?.releasePointerCapture(activePointerId); } catch (e) {}
 
       if (!didDrop){
         resetChipStyles(draggingChip);
@@ -342,6 +352,7 @@ el.addEventListener('pointerdown', (e) => {
     }
 
     friendList.addEventListener('pointerdown', (e) => {
+      console.log('pointerdown on friendList', e.target);
       if (READONLY) return;
       const chip = e.target.closest('.chip');
       if (!chip) return;
@@ -374,7 +385,7 @@ el.addEventListener('pointerdown', (e) => {
       chip.style.transform = 'translateZ(0)';
       document.body.appendChild(chip);
 
-      try { friendList.setPointerCapture(e.pointerId); } catch (err) {}
+      try { chip.setPointerCapture(e.pointerId); } catch (err) {}
 
       window.addEventListener('pointermove', onMove, { passive: false });
       window.addEventListener('pointerup', onUp, { passive: false });
