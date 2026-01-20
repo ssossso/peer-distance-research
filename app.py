@@ -741,7 +741,6 @@ def student_enter_session(code, sid):
 
     # ✅ DB 우선: 학급 존재 확인 + 학생 명단 로드
     if engine:
-        # 학급 존재 확인
         with engine.connect() as conn:
             row = conn.execute(text("""
                 SELECT code, name
@@ -756,29 +755,6 @@ def student_enter_session(code, sid):
         # 화면용 sessions 메타(기존 템플릿 유지)
         cls = ensure_class_schema({"code": code, "name": row.name, "sessions": {}})
 
-        # 학생 목록: DB에서 가져와서 students_data 형태로 맞춤
-        students = db_get_students_in_class(code)
-        cls["students"] = students
-        cls["students_data"] = {s["name"]: {"sessions": {}} for s in students}
-
-    else:
-        # (예외) DB 없을 때만 JSON
-    # ✅ DB 우선: 학급 존재 확인 + 학생 목록 로드
-    if engine:
-        with engine.connect() as conn:
-            row = conn.execute(text("""
-                SELECT code, name
-                FROM classes
-                WHERE code = :code
-                LIMIT 1
-            """), {"code": code}).fetchone()
-
-        if not row:
-            return "학급을 찾을 수 없습니다.", 404
-
-        # 화면용 sessions 메타 생성
-        cls = ensure_class_schema({"code": code, "name": row.name, "sessions": {}})
-
         # DB 학생 목록 -> 템플릿이 쓰는 형태로 맞춤
         students = db_get_students_in_class(code)
         cls["students"] = students
@@ -790,6 +766,7 @@ def student_enter_session(code, sid):
         cls = ensure_class_schema(d.get("classes", {}).get(code))
         if not cls:
             return "학급을 찾을 수 없습니다.", 404
+
 
     if sid not in cls.get("sessions", {}):
         sid = "1"
@@ -894,6 +871,13 @@ def student_write():
     code = session["code"]
     name = session["name"]
 
+    # ✅ 먼저 sid를 만들고 시작해야 DB 조회에서 sid를 쓸 수 있음
+    sid = (session.get("sid") or "1").strip()
+    if sid not in ["1", "2", "3", "4", "5"]:
+        sid = "1"
+        session["sid"] = sid
+
+    
     # ✅ DB 우선: 학급/학생 확인 + 친구목록 구성
     if engine:
         # 학급 존재 확인
@@ -949,12 +933,6 @@ def student_write():
 
         friends = [s["name"] for s in cls.get("students", []) if isinstance(s, dict) and s.get("name") != name]
 
-
-    # 회차(sid) 안전 처리
-    sid = (session.get("sid") or "1").strip()
-    if sid not in cls.get("sessions", {}):
-        sid = "1"
-        session["sid"] = sid
 
     student = cls["students_data"][name]
 
@@ -1025,6 +1003,16 @@ def student_write():
 
         return redirect("/student/submitted")
 
+        return render_template(
+            "student_write.html",
+            name=name,
+            friends=friends,
+            placements=placements,
+            student_session=ssession,
+            sid=sid,
+            session_meta=cls.get("sessions", {}).get(sid, {}),
+        )
+    
 
     return render_template(
         "student_write.html",
