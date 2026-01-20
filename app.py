@@ -14,7 +14,7 @@ SITE_TITLE = "내가 바라본 우리 반"
 DATA_FILE = "data.json"
 
 # --- Google Sheets 연동 ---
-GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyPnpeTtY2eva-7yJgi3ql2iquROaitNJmULGGbYyfdQqh_4YnXspu88L9osX3mJaTx/exec"
+GOOGLE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyjKC2JearJnySkxdG0oahMkMJ5V6uBqY5EYRGVVRa8KWZvRzHcskeVNY5hnlyiSw/exec"
 GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "").strip()
 
 # ---------- Google Sheets POST ----------
