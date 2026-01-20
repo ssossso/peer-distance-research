@@ -64,6 +64,22 @@
   </form>
 </div>
 
+<style>
+  /* 클릭/터치 시 커지는 효과 방지 */
+.chip, .token {
+  transform: none !important;
+  -webkit-tap-highlight-color: transparent;
+  transition: none !important;
+}
+
+.chip:active,
+.token:active {
+  transform: none !important;
+}
+
+  
+</style>
+
 <script>
   const READONLY = {{ 'true' if student_session.submitted else 'false' }};
   const friends = {{ friends|tojson }};
@@ -76,92 +92,75 @@
   function clamp(v, min, max){ return Math.min(Math.max(v, min), max); }
   const EDGE_MARGIN = 6;
 
-  function makeToken(name){
-    const el = document.createElement('div');
-    el.className = 'token';
-    el.dataset.name = name;
-    el.style.position = 'absolute';
-    el.style.padding = '8px 10px';
-    el.style.borderRadius = '10px';
-    el.style.border = '1px solid #d1d5db';
-    el.style.background = '#ffffff';
-    el.style.fontWeight = '800';
-    el.style.fontSize = '13px';
-    el.style.cursor = READONLY ? 'default' : 'grab';
-    el.style.userSelect = 'none';
-    el.style.display = 'inline-flex';
-    el.style.alignItems = 'center';
-    el.style.gap = '8px';
-    el.textContent = name;
+function makeToken(name){
+  const el = document.createElement('div');
+  el.className = 'token';
+  el.dataset.name = name;
+  ...
+  el.textContent = name;
 
-    if (!READONLY){
-      const back = document.createElement('button');
-      back.type = 'button';
-      back.textContent = '↩';
-      back.title = '목록으로 되돌리기';
-      back.style.marginLeft = '2px';
-      back.style.width = '26px';
-      back.style.height = '22px';
-      back.style.borderRadius = '8px';
-      back.style.border = '1px solid #e5e7eb';
-      back.style.background = '#f9fafb';
-      back.style.cursor = 'pointer';
-      back.style.padding = '0';
-      back.addEventListener('click', () => {
-        const n = el.dataset.name;
-        el.remove();
-        addChipBack(n);
-        syncPlacements();
-      });
+  if (!READONLY) attachDrag(el);
+  return el;
+}
 
-      el.textContent = '';
-      const label = document.createElement('span');
-      label.textContent = name;
-      el.appendChild(label);
-      el.appendChild(back);
+function attachDrag(el){
+  let dragging = false;
+  let offsetX = 0, offsetY = 0;
+
+el.addEventListener('pointerdown', (e) => {
+  if (READONLY) return;
+  dragging = true;
+  el.setPointerCapture?.(e.pointerId);
+  el.style.cursor = 'grabbing';
+
+  // ✅ 크기 변화 완전 차단
+  el.style.transform = 'none';
+
+  const r = el.getBoundingClientRect();
+  offsetX = e.clientX - r.left;
+  offsetY = e.clientY - r.top;
+  e.preventDefault();
+});
+
+
+  el.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const c = canvas.getBoundingClientRect();
+    let x = e.clientX - c.left - offsetX;
+    let y = e.clientY - c.top - offsetY;
+
+    x = clamp(x, EDGE_MARGIN, c.width - el.offsetWidth - EDGE_MARGIN);
+    y = clamp(y, EDGE_MARGIN, c.height - el.offsetHeight - EDGE_MARGIN);
+
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    syncPlacements();
+    e.preventDefault();
+  });
+
+  el.addEventListener('pointerup', (e) => {
+    if (!dragging) return;
+    dragging = false;
+    el.style.cursor = 'grab';
+
+    // --- 여기부터: "친구 목록에 드롭하면 되돌리기" ---
+    const fl = friendList.getBoundingClientRect();
+    const inFriendList =
+      (e.clientX >= fl.left && e.clientX <= fl.right && e.clientY >= fl.top && e.clientY <= fl.bottom);
+
+    if (inFriendList){
+      const n = el.dataset.name;
+      el.remove();
+      if (window.addChipBack) window.addChipBack(n);
+      syncPlacements();
+      return;
     }
+    // --- 여기까지 ---
 
-    if (!READONLY) attachDrag(el);
-    return el;
-  }
+    syncPlacements();
+  });
+}
 
-  function attachDrag(el){
-    let dragging = false;
-    let offsetX = 0, offsetY = 0;
-
-    el.addEventListener('pointerdown', (e) => {
-      if (READONLY) return;
-      dragging = true;
-      el.setPointerCapture?.(e.pointerId);
-      el.style.cursor = 'grabbing';
-      const r = el.getBoundingClientRect();
-      offsetX = e.clientX - r.left;
-      offsetY = e.clientY - r.top;
-      e.preventDefault();
-    });
-
-    el.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      const c = canvas.getBoundingClientRect();
-      let x = e.clientX - c.left - offsetX;
-      let y = e.clientY - c.top - offsetY;
-
-      x = clamp(x, EDGE_MARGIN, c.width - el.offsetWidth - EDGE_MARGIN);
-      y = clamp(y, EDGE_MARGIN, c.height - el.offsetHeight - EDGE_MARGIN);
-
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      syncPlacements();
-      e.preventDefault();
-    });
-
-    el.addEventListener('pointerup', () => {
-      if (!dragging) return;
-      dragging = false;
-      el.style.cursor = 'grab';
-      syncPlacements();
-    });
-  }
 
   function syncPlacements(){
     const cRect = canvas.getBoundingClientRect();
