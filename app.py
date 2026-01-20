@@ -180,6 +180,43 @@ def db_get_submitted_map(class_code: str, sid: str):
         m[r.student_name] = bool(r.submitted)
     return m
 
+def db_upsert_student_session(class_code: str, student_name: str, sid: str, placements: dict, submitted: bool):
+    """
+    student_sessions에 (학급코드, 학생이름, 회차) 기준으로 저장/갱신
+    """
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.begin() as conn:
+        # 이미 있으면 UPDATE, 없으면 INSERT
+        row = conn.execute(text("""
+            SELECT id FROM student_sessions
+            WHERE class_code = :code AND student_name = :name AND session_id = :sid
+            LIMIT 1
+        """), {"code": class_code, "name": student_name, "sid": sid}).fetchone()
+
+        if row:
+            conn.execute(text("""
+                UPDATE student_sessions
+                SET placements = :placements, submitted = :submitted
+                WHERE id = :id
+            """), {
+                "placements": json.dumps(placements, ensure_ascii=False),
+                "submitted": submitted,
+                "id": row.id
+            })
+        else:
+            conn.execute(text("""
+                INSERT INTO student_sessions (class_code, student_name, session_id, placements, submitted)
+                VALUES (:code, :name, :sid, :placements, :submitted)
+            """), {
+                "code": class_code,
+                "name": student_name,
+                "sid": sid,
+                "placements": json.dumps(placements, ensure_ascii=False),
+                "submitted": submitted
+            })
+
 
 # 서버 시작 시 DB 테이블 자동 생성
 try:
@@ -773,9 +810,15 @@ def student_write():
     placements = (ssession.get("placements") or {})
 
     if request.method == "POST":
-        # 제출 완료면 막기
-        if ssession.get("submitted"):
-            return redirect("/student/submitted")
+        # 제출 완료면 막기 (✅ DB 우선)
+        if engine:
+            submitted_map = db_get_submitted_map(code, sid)
+            if submitted_map.get(name, False):
+                return redirect("/student/submitted")
+        else:
+            if ssession.get("submitted"):
+                return redirect("/student/submitted")
+
 
         placements_json = (request.form.get("placements_json") or "{}").strip()
         try:
@@ -806,16 +849,25 @@ def student_write():
                 session_meta=cls.get("sessions", {}).get(sid, {}),
             )
 
-        # 로컬에도 저장
-        ssession["placements"] = placements_obj
-        ssession["submitted"] = True
-        student["sessions"][sid] = ssession
-
-        # cls를 다시 d에 넣고 안전 저장
-        d["classes"][code] = ensure_class_schema(cls)
-        save_data_safely(d)
+        # ✅ DB에 제출 저장 (배포해도 유지)
+        if engine:
+            db_upsert_student_session(
+                class_code=code,
+                student_name=name,
+                sid=sid,
+                placements=placements_obj,
+                submitted=True
+            )
+        else:
+            # (예외적) DB가 없을 때만 JSON fallback
+            ssession["placements"] = placements_obj
+            ssession["submitted"] = True
+            student["sessions"][sid] = ssession
+            d["classes"][code] = ensure_class_schema(cls)
+            save_data_safely(d)
 
         return redirect("/student/submitted")
+
 
     return render_template(
         "student_write.html",
