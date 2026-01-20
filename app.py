@@ -142,6 +142,14 @@ def debug_secret():
         "len": len(s),
         "sha256_8": hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
     }
+@app.route("/debug/sheets")
+def debug_sheets():
+    import hashlib
+    return {
+        "webapp_url": GOOGLE_WEBAPP_URL,
+        "secret_len": len(GOOGLE_SECRET or ""),
+        "secret_sha256_8": hashlib.sha256((GOOGLE_SECRET or "").encode("utf-8")).hexdigest()[:8],
+    }
 
 # ---------- 로그아웃 ----------
 @app.route("/teacher/logout")
