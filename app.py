@@ -71,6 +71,33 @@ def init_db():
         ON students (class_code, name);
         """))
 
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS teacher_placement_runs (
+    id SERIAL PRIMARY KEY,
+    class_code TEXT NOT NULL,
+    teacher_username TEXT NOT NULL,
+    session_id TEXT NOT NULL,                -- "1"~"5"
+    condition TEXT NOT NULL,                 -- "BASELINE" / "TOOL_ASSISTED"
+    tool_run_id INTEGER,                     -- 나중에 clustering/perception run id 연결(없으면 NULL)
+    placements JSONB,                        -- 학생과 동일 포맷: {"이름": {"x":..,"y":..,"d":..}, ...}
+    started_at TIMESTAMP DEFAULT NOW(),
+    ended_at TIMESTAMP,
+    duration_ms INTEGER,
+    confidence_score INTEGER,                -- 1~7 추천
+    submitted BOOLEAN DEFAULT FALSE
+);
+"""))
+
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS teacher_decisions (
+    id SERIAL PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES teacher_placement_runs(id) ON DELETE CASCADE,
+    target_student_name TEXT NOT NULL,
+    priority_rank INTEGER NOT NULL,          -- 1..N
+    decision_confidence INTEGER,             -- 선택(1~7)
+    reason_tags JSONB                         -- 선택(["고립","주변화"...] 같은 태그)
+);
+"""))
 
 
 
@@ -271,6 +298,113 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
                 "placements": json.dumps(placements, ensure_ascii=False),
                 "submitted": submitted
             })
+
+def db_create_teacher_run(class_code: str, teacher_username: str, sid: str, condition: str, tool_run_id=None) -> int:
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.begin() as conn:
+        row = conn.execute(text("""
+            INSERT INTO teacher_placement_runs (class_code, teacher_username, session_id, condition, tool_run_id, placements, submitted)
+            VALUES (:code, :t, :sid, :cond, :tool_run_id, :placements, FALSE)
+            RETURNING id
+        """), {
+            "code": class_code,
+            "t": teacher_username,
+            "sid": sid,
+            "cond": condition,
+            "tool_run_id": tool_run_id,
+            "placements": json.dumps({}, ensure_ascii=False),
+        }).fetchone()
+    return int(row.id)
+
+
+def db_get_teacher_run(run_id: int):
+    if not engine:
+        return None
+
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT id, class_code, teacher_username, session_id, condition, tool_run_id,
+                   placements, submitted, started_at, ended_at, duration_ms, confidence_score
+            FROM teacher_placement_runs
+            WHERE id = :id
+            LIMIT 1
+        """), {"id": run_id}).fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "id": row.id,
+        "class_code": row.class_code,
+        "teacher_username": row.teacher_username,
+        "session_id": row.session_id,
+        "condition": row.condition,
+        "tool_run_id": row.tool_run_id,
+        "placements": row.placements or {},
+        "submitted": bool(row.submitted),
+        "started_at": row.started_at,
+        "ended_at": row.ended_at,
+        "duration_ms": row.duration_ms,
+        "confidence_score": row.confidence_score,
+    }
+
+
+def db_update_teacher_run_placements(run_id: int, placements: dict):
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE teacher_placement_runs
+            SET placements = :placements
+            WHERE id = :id
+        """), {
+            "placements": json.dumps(placements, ensure_ascii=False),
+            "id": run_id
+        })
+
+
+def db_complete_teacher_run(run_id: int, duration_ms: int, confidence_score: int):
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE teacher_placement_runs
+            SET ended_at = NOW(),
+                duration_ms = :duration_ms,
+                confidence_score = :confidence_score,
+                submitted = TRUE
+            WHERE id = :id
+        """), {
+            "duration_ms": duration_ms,
+            "confidence_score": confidence_score,
+            "id": run_id
+        })
+
+
+def db_replace_teacher_decisions(run_id: int, decisions: list[dict]):
+    """결정(우선순위)은 수정 가능성이 있으니, 저장 시 기존 것 삭제 후 다시 넣는 방식이 단순합니다."""
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM teacher_decisions WHERE run_id = :run_id"), {"run_id": run_id})
+
+        for d in decisions:
+            conn.execute(text("""
+                INSERT INTO teacher_decisions (run_id, target_student_name, priority_rank, decision_confidence, reason_tags)
+                VALUES (:run_id, :name, :rank, :conf, :tags)
+            """), {
+                "run_id": run_id,
+                "name": (d.get("name") or "").strip(),
+                "rank": int(d.get("rank") or 0),
+                "conf": int(d.get("confidence") or 0) if d.get("confidence") else None,
+                "tags": json.dumps(d.get("tags"), ensure_ascii=False) if d.get("tags") is not None else None,
+            })
+
 
 
 # 서버 시작 시 DB 테이블 자동 생성
@@ -848,6 +982,100 @@ def qr_session_link(code, sid):
     resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp
 
+@app.route("/teacher/class/<code>/placement/start")
+def teacher_placement_start(code):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    sid = (request.args.get("sid") or session.get("selected_session") or "1").strip()
+    if sid not in ["1","2","3","4","5"]:
+        sid = "1"
+
+    condition = (request.args.get("condition") or "BASELINE").strip()
+    if condition not in ["BASELINE", "TOOL_ASSISTED"]:
+        condition = "BASELINE"
+
+    tool_run_id = request.args.get("tool_run_id")
+    tool_run_id = int(tool_run_id) if (tool_run_id and tool_run_id.isdigit()) else None
+
+    run_id = db_create_teacher_run(code, session["teacher"], sid, condition, tool_run_id=tool_run_id)
+    return redirect(f"/teacher/placement/{run_id}")
+
+@app.route("/teacher/placement/<int:run_id>", methods=["GET", "POST"])
+def teacher_placement_write(run_id):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    run = db_get_teacher_run(run_id)
+    if not run or run["teacher_username"] != session["teacher"]:
+        return "접근 권한이 없습니다.", 403
+
+    code = run["class_code"]
+    sid = run["session_id"]
+
+    students = db_get_students_in_class(code)
+    all_names = [s["name"] for s in students]  # 교사 화면에서는 전체가 '대상'
+    placements = run["placements"] or {}
+
+    if request.method == "POST":
+        placements_json = (request.form.get("placements_json") or "{}").strip()
+        try:
+            placements_obj = json.loads(placements_json) if placements_json else {}
+        except Exception:
+            placements_obj = {}
+
+        db_update_teacher_run_placements(run_id, placements_obj)
+
+        # 배치 저장 후 완료(설문) 화면으로 이동
+        return redirect(f"/teacher/placement/{run_id}/complete")
+
+    return render_template(
+        "teacher_write.html",
+        run=run,
+        code=code,
+        sid=sid,
+        friends=all_names,
+        placements=placements,
+    )
+
+@app.route("/teacher/placement/<int:run_id>/complete", methods=["GET", "POST"])
+def teacher_placement_complete(run_id):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    run = db_get_teacher_run(run_id)
+    if not run or run["teacher_username"] != session["teacher"]:
+        return "접근 권한이 없습니다.", 403
+
+    if request.method == "POST":
+        duration_ms = request.form.get("duration_ms") or "0"
+        confidence_score = request.form.get("confidence_score") or "0"
+
+        try:
+            duration_ms = int(duration_ms)
+        except Exception:
+            duration_ms = 0
+
+        try:
+            confidence_score = int(confidence_score)
+        except Exception:
+            confidence_score = 0
+
+        # 우선순위(예: 1~3위) - form에서 name="priority_1" ... 형태로 받는 방식 추천
+        decisions = []
+        for rank in [1,2,3]:
+            nm = (request.form.get(f"priority_{rank}") or "").strip()
+            if nm:
+                decisions.append({"name": nm, "rank": rank})
+
+        db_replace_teacher_decisions(run_id, decisions)
+        db_complete_teacher_run(run_id, duration_ms=duration_ms, confidence_score=confidence_score)
+
+        # 완료 후 학급 상세로 이동
+        return redirect(f"/teacher/class/{run['class_code']}?sid={run['session_id']}")
+
+    return render_template("teacher_complete.html", run=run)
 
 
 # ---------- 학생 입장 ----------
