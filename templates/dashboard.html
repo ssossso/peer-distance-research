@@ -24,11 +24,38 @@
     <!-- ========================= -->
     <hr style="margin:16px 0; border:none; border-top:1px solid #e5e7eb;">
 
-    <div class="card" style="background:#fff7f7; border:1px solid #fee2e2;">
-      <div style="font-weight:900; margin-bottom:6px;">학급 삭제</div>
-      <div class="subtitle" style="margin:0 0 10px 0;">
-        삭제한 학급은 되돌릴 수 없습니다. (학생/제출 데이터 포함)
-      </div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #e5e7eb;">
+
+<details class="card" style="background:#fff7f7; border:1px solid #fee2e2;">
+  <summary style="cursor:pointer; font-weight:900; padding:6px 0;">
+    학급 삭제
+    <span class="muted" style="font-weight:600; margin-left:8px;">
+      (펼쳐서 진행)
+    </span>
+  </summary>
+
+  <div style="margin-top:10px;">
+    <div class="subtitle" style="margin:0 0 10px 0;">
+      삭제한 학급은 되돌릴 수 없습니다. (학생/제출 데이터 포함)
+    </div>
+
+    <form method="post" action="/teacher/class/delete"
+          onsubmit="return confirmDeleteClass();"
+          style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+
+      <select name="code" id="deleteClassSelect"
+              style="padding:10px; border-radius:10px; border:1px solid #d1d5db; min-width:220px;">
+        <option value="">삭제할 학급 선택</option>
+        {% for code, cls in classes.items() %}
+          <option value="{{ code }}">{{ cls.name }} ({{ code }})</option>
+        {% endfor %}
+      </select>
+
+      <button type="submit" style="background:#ef4444;">삭제</button>
+    </form>
+  </div>
+</details>
+
 
       <form method="post" action="/teacher/class/delete"
             onsubmit="return confirmDeleteClass();"
