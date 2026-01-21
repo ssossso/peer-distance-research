@@ -190,22 +190,42 @@
       fogCtx.fill();
     }
 
-    // 2) 임계값 처리(덩어리만 남김)
-    const img = fogCtx.getImageData(0, 0, w, h);
-    const d = img.data;
+    // 2) Soft threshold: 경계가 서서히 사라지게(그라데이션)
+      const img = fogCtx.getImageData(0, 0, w, h);
+      const d = img.data;
 
-    for (let i = 0; i < d.length; i += 4){
-      const a = d[i + 3]; // 0~255
-      if (a > METABALL_THRESHOLD){
-        d[i]     = 90;
-        d[i + 1] = 90;
-        d[i + 2] = 90;
-        d[i + 3] = Math.min(110, 35 + (a - METABALL_THRESHOLD) * 1.1);
-      } else {
-        d[i + 3] = 0;
-      }
-    }
-    fogCtx.putImageData(img, 0, 0);
+// threshold 주변에서 부드럽게 페이드되는 폭(픽셀 알파 기준)
+      const SOFT_EDGE = 55;          // 30~80 권장 (클수록 더 부드러운 경계)
+      const MAX_ALPHA = 110;         // 최종 덩어리 진하기(0~255, 80~130 권장)
+      const BASE_RGB = 90;           // 회색 톤
+
+      for (let i = 0; i < d.length; i += 4){
+        const a = d[i + 3]; // 누적된 필드(0~255)
+
+  // a가 threshold보다 작으면 완전 투명
+        if (a <= METABALL_THRESHOLD){
+          d[i + 3] = 0;
+          continue;
+  }
+
+  // threshold를 넘은 구간에서 alpha를 0~MAX_ALPHA로 점진 증가
+  // t = 0 (경계) -> 1 (경계+SOFT_EDGE 이상)
+        let t = (a - METABALL_THRESHOLD) / SOFT_EDGE;
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
+
+  // smootherstep으로 더 자연스럽게(부드러운 S-curve)
+  // t = t*t*(3-2t)
+        t = t * t * (3 - 2 * t);
+
+        d[i]     = BASE_RGB;
+        d[i + 1] = BASE_RGB;
+        d[i + 2] = BASE_RGB;
+        d[i + 3] = Math.round(t * MAX_ALPHA);
+}
+
+fogCtx.putImageData(img, 0, 0);
+
   }
 
   // ===============================
