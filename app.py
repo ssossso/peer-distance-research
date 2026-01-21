@@ -317,6 +317,30 @@ def db_get_submitted_map(class_code: str, sid: str):
         m[r.student_name] = bool(r.submitted)
     return m
 
+def db_list_submitted_student_sessions(class_code: str, sid: str):
+    """
+    해당 학급/회차에서 제출(submitted=True)한 학생들의 placements를 모두 가져오기
+    return: [{"student_name": ..., "placements": {...}}, ...]
+    """
+    if not engine:
+        return []
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT student_name, placements
+            FROM student_sessions
+            WHERE class_code = :code
+              AND session_id = :sid
+              AND submitted = TRUE
+            ORDER BY id ASC
+        """), {"code": class_code, "sid": sid}).fetchall()
+
+    out = []
+    for r in rows:
+        out.append({"student_name": r.student_name, "placements": r.placements or {}})
+    return out
+
+
 def db_upsert_student_session(class_code: str, student_name: str, sid: str, placements: dict, submitted: bool):
     """
     student_sessions에 (학급코드, 학생이름, 회차) 기준으로 저장/갱신
@@ -1234,6 +1258,130 @@ def analysis_teacher_run(code, sid, run_id):
 
     cache_set(code, sid, cache_key, payload)
     return jsonify(payload)
+
+@app.route("/analysis/class/<code>/<sid>/student_avg.json")
+def analysis_student_avg(code, sid):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    sid = (sid or "1").strip()
+    if sid not in ["1","2","3","4","5"]:
+        sid = "1"
+
+    # 교사 권한 확인: 해당 학급 소유자만 조회 가능
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if cls == "FORBIDDEN" or not cls:
+        return jsonify({"error": "forbidden"}), 403
+
+    cache_key = f"student_avg_{sid}"
+    cached = cache_get(code, sid, cache_key)
+    if cached:
+        return jsonify(cached)
+
+    payload = student_avg_distance_payload(code, sid)
+    cache_set(code, sid, cache_key, payload)
+    return jsonify(payload)
+
+
+def points_from_student_session(placements: dict, names: list[str], self_name: str):
+    """
+    학생 1명(=응답자)의 배치를 전체 학생명(names, 길이 N)에 맞춰 point list로 변환.
+    - self_name(응답자)은 placements에 없으므로 (0,0)으로 암묵 포함
+    - 나머지는 placements[name].x, placements[name].y 사용 (student_write의 rel 좌표)
+    - 누락은 invalid 처리
+    - 스케일 차이를 줄이기 위해 bbox 기반 0~1 정규화(방향은 의미 없고 거리만 쓰므로 안전)
+    """
+    pts = []
+    valid = []
+
+    for nm in names:
+        if nm == self_name:
+            pts.append((0.0, 0.0))
+            valid.append(True)
+            continue
+
+        v = placements.get(nm)
+        if not isinstance(v, dict):
+            pts.append((0.0, 0.0))
+            valid.append(False)
+            continue
+
+        x = v.get("x")
+        y = v.get("y")
+        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+            pts.append((0.0, 0.0))
+            valid.append(False)
+            continue
+
+        pts.append((float(x), float(y)))
+        valid.append(True)
+
+    # bbox 정규화 (valid 포인트들 기준)
+    xs = [pts[i][0] for i in range(len(pts)) if valid[i]]
+    ys = [pts[i][1] for i in range(len(pts)) if valid[i]]
+    if len(xs) >= 2 and len(ys) >= 2:
+        minx, maxx = min(xs), max(xs)
+        miny, maxy = min(ys), max(ys)
+        rx = (maxx - minx) if (maxx - minx) > 1e-9 else 1.0
+        ry = (maxy - miny) if (maxy - miny) > 1e-9 else 1.0
+        pts = [((x - minx)/rx, (y - miny)/ry) for (x, y) in pts]
+
+    return pts, valid
+
+
+def student_avg_distance_payload(class_code: str, sid: str):
+    """
+    학생 제출 전체(submitted=True)로부터:
+    - 학생별 거리행렬 생성
+    - pairwise mean으로 평균 거리행렬 생성
+    - MDS로 평균맵 좌표 생성
+    """
+    students = db_get_students_in_class(class_code)
+    names = [s["name"] for s in students]
+    n_total = len(names)
+    if n_total == 0:
+        return {
+            "class_code": class_code,
+            "session_id": sid,
+            "names": [],
+            "n_submitted": 0,
+            "avg_distance_matrix": [],
+            "mds_2d": [],
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+    submitted = db_list_submitted_student_sessions(class_code, sid)
+
+    mats = []
+    used_students = []
+    for item in submitted:
+        self_name = item.get("student_name")
+        placements = item.get("placements") or {}
+
+        if self_name not in names:
+            continue
+
+        pts, valid = points_from_student_session(placements, names, self_name=self_name)
+        D = distance_matrix(pts, valid)
+        mats.append(D)
+        used_students.append(self_name)
+
+    avgD = mean_distance_matrix(mats)
+    X = classical_mds_2d(avgD) if avgD else []
+
+    return {
+        "class_code": class_code,
+        "session_id": sid,
+        "names": names,
+        "n_total": n_total,
+        "n_submitted": len(used_students),
+        "submitted_students": used_students,
+        "avg_distance_matrix": avgD,
+        "mds_2d": [{"x": X[i][0], "y": X[i][1]} for i in range(len(X))],
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
 
 
 # ---------- 학생 입장 ----------
