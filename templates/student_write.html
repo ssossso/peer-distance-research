@@ -1,10 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card" style="max-width:980px; text-align:left;">
-  <h2 style="margin:0 0 6px 0; text-align:center;">
-    {{ current_class.name if current_class else "내가 바라본 우리 반" }}
-  </h2>
-
+  <h2 style="margin:0 0 6px 0; text-align:center;">{{ current_class.name if current_class else "내가 바라본 우리 반" }}</h2>
   <p style="margin:0 0 14px 0; text-align:center;">
     <b>{{ name }}</b>
     <span class="muted" style="margin-left:8px;">
@@ -28,9 +25,9 @@
   {% endif %}
 
   {% if teacher_view %}
-    <div class="subtitle" style="text-align:center; margin-bottom:12px;">
-      교사용 열람 화면입니다. (수정/제출 불가)
-    </div>
+  <div class="subtitle" style="text-align:center; margin-bottom:12px;">
+    교사용 열람 화면입니다. (수정/제출 불가)
+  </div>
   {% endif %}
 
   <form method="post" id="measureForm" onsubmit="return onSubmitMeasure();">
@@ -40,13 +37,12 @@
       <!-- 캔버스 -->
       <div>
         <div id="canvas" style="position:relative; height:clamp(360px, 62vh, 520px); border:1px solid #d1d5db; border-radius:12px; background:#fff; overflow:hidden; touch-action:none;">
-
-          <!-- ✅ 안개(밀도) 레이어: 토큰보다 뒤 -->
+          <!-- ✅ 안개 레이어(뒤) -->
           <canvas id="fogLayer"
-                  style="position:absolute; inset:0; width:100%; height:100%;
-                         pointer-events:none; z-index:1;"></canvas>
+            style="position:absolute; inset:0; width:100%; height:100%;
+                   pointer-events:none; z-index:1;"></canvas>
 
-          <!-- 나(중앙점) -->
+          <!-- ✅ 중심(나) -->
           <div id="selfDot" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none; z-index:3;">
             <div style="width:18px; height:18px; border-radius:999px; background:#4a6cf7; margin:auto;"></div>
             <div style="font-size:12px; font-weight:800; margin-top:6px; text-align:center;">나</div>
@@ -61,19 +57,18 @@
       <!-- 친구 목록 -->
       <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd; height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
         <div style="font-weight:800; margin-bottom:10px;">친구 목록</div>
-
         <div id="friendList" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start; flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable;">
           {% for f in friends %}
-            <div class="chip" data-name="{{ f }}"
-                 style="user-select:none; cursor:grab; padding:8px 6px;
-                        border-radius:10px; border:1px solid #d1d5db;
-                        background:#ffffff;
-                        font-weight:600;
-                        font-size:12.5px;
-                        font-family:sans-serif;
-                        text-align:center; touch-action:none;">
-              {{ f }}
-            </div>
+          <div class="chip" data-name="{{ f }}"
+             style="user-select:none; cursor:grab; padding:8px 6px;
+                    border-radius:10px; border:1px solid #d1d5db;
+                    background:#ffffff;
+                    font-weight:600;
+                    font-size:12.5px;
+                    font-family:sans-serif;
+                    text-align:center; touch-action:none;">
+            {{ f }}
+          </div>
           {% endfor %}
         </div>
 
@@ -109,62 +104,61 @@
   const friendList = document.getElementById('friendList');
   const placementsInput = document.getElementById('placements_json');
 
-  // ✅ 안개 레이어
   const fogLayer = document.getElementById('fogLayer');
-  const fogCtx = fogLayer ? fogLayer.getContext('2d') : null;
+  const fogCtx = fogLayer ? fogLayer.getContext('2d', { willReadFrequently: true }) : null;
 
   function clamp(v, min, max){ return Math.min(Math.max(v, min), max); }
   const EDGE_MARGIN = 6;
 
-  // ----------------------------
-  // 안개(밀도) 파라미터
-  // ----------------------------
-  const FOG_RADIUS = 75;          // 퍼짐 정도(60~85 추천)
-  const FOG_ALPHA = 0.06;         // 바깥 알파(0.04~0.08 추천)
-  const FOG_CENTER_ALPHA = 0.09;  // 중심 알파(0.07~0.12 추천)
-
+  // ===============================
+  // 안개(드래그 중: Light / 놓으면: Metaball)
+  // ===============================
   let fogRaf = null;
 
-  function resizeFogCanvas(){
-    if (!fogLayer || !fogCtx) return;
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+  // Light fog (드래그 중)
+  const FOG_RADIUS = 80;
+  const FOG_CENTER_ALPHA = 0.12;
+  const FOG_ALPHA = 0.06;
 
-    fogLayer.width = Math.max(1, Math.floor(rect.width * dpr));
-    fogLayer.height = Math.max(1, Math.floor(rect.height * dpr));
+  // Metaball fog (놓으면 뿌요뿌요)
+  const METABALL_THRESHOLD = 42;    // 낮을수록 더 쉽게 붙음
+  const METABALL_BLUR_RADIUS = 85;  // 퍼짐 반경
+  const METABALL_STRENGTH = 0.11;   // 중심 농도
 
-    // 좌표계를 CSS px로 맞춤 (이후 draw는 px 단위로)
-    fogCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  function resizeFog(){
+    if (!fogLayer) return;
+    const r = canvas.getBoundingClientRect();
+    fogLayer.width = Math.floor(r.width);
+    fogLayer.height = Math.floor(r.height);
   }
 
   function getTokenCenters(){
     const tokens = Array.from(canvas.querySelectorAll('.token'));
     return tokens.map(t => ({
+      name: t.dataset.name,
       x: (parseFloat(t.style.left || '0') + t.offsetWidth / 2),
-      y: (parseFloat(t.style.top || '0') + t.offsetHeight / 2),
+      y: (parseFloat(t.style.top  || '0') + t.offsetHeight / 2),
     }));
   }
 
-  function renderFog(){
+  function renderFogLight(){
     if (!fogLayer || !fogCtx) return;
 
     if (fogRaf) cancelAnimationFrame(fogRaf);
     fogRaf = requestAnimationFrame(() => {
       fogRaf = null;
 
-      const rect = canvas.getBoundingClientRect();
-      fogCtx.clearRect(0, 0, rect.width, rect.height);
+      const w = fogLayer.width, h = fogLayer.height;
+      fogCtx.clearRect(0, 0, w, h);
 
       const pts = getTokenCenters();
       if (pts.length === 0) return;
 
-      // 기본 source-over: 겹칠수록 자연스럽게 진해짐
       for (const p of pts){
         const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, FOG_RADIUS);
         g.addColorStop(0.00, `rgba(90,90,90,${FOG_CENTER_ALPHA})`);
         g.addColorStop(0.55, `rgba(90,90,90,${FOG_ALPHA})`);
         g.addColorStop(1.00, `rgba(90,90,90,0.0)`);
-
         fogCtx.fillStyle = g;
         fogCtx.beginPath();
         fogCtx.arc(p.x, p.y, FOG_RADIUS, 0, Math.PI * 2);
@@ -173,83 +167,50 @@
     });
   }
 
-  function makeToken(name){
-    const el = document.createElement('div');
-    el.className = 'token';
-    el.dataset.name = name;
-    el.style.fontWeight = '600';
-    el.style.fontSize = '12.5px';
-    el.style.fontFamily = 'sans-serif';
+  function renderFogMetaball(){
+    if (!fogLayer || !fogCtx) return;
 
-    // 드래그로 움직이려면 absolute
-    el.style.position = 'absolute';
-    el.style.zIndex = '4'; // ✅ 안개(1) / self(3) 위로
-    el.style.left = '0px';
-    el.style.top = '0px';
+    const w = fogLayer.width, h = fogLayer.height;
+    fogCtx.clearRect(0, 0, w, h);
 
-    el.style.touchAction = 'none';
-    el.style.userSelect = 'none';
-    el.style.cursor = 'grab';
-    el.textContent = name;
+    const pts = getTokenCenters();
+    if (pts.length === 0) return;
 
-    if (!READONLY) attachDrag(el);
-    return el;
-  }
+    // 1) 흰 필드 누적(겹치면 밝아짐)
+    fogCtx.globalCompositeOperation = 'source-over';
+    for (const p of pts){
+      const r = METABALL_BLUR_RADIUS;
+      const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+      g.addColorStop(0.00, `rgba(255,255,255,${METABALL_STRENGTH})`);
+      g.addColorStop(0.55, `rgba(255,255,255,${METABALL_STRENGTH * 0.6})`);
+      g.addColorStop(1.00, `rgba(255,255,255,0.0)`);
+      fogCtx.fillStyle = g;
+      fogCtx.beginPath();
+      fogCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      fogCtx.fill();
+    }
 
-  function attachDrag(el){
-    let dragging = false;
-    let offsetX = 0, offsetY = 0;
+    // 2) 임계값 처리(덩어리만 남김)
+    const img = fogCtx.getImageData(0, 0, w, h);
+    const d = img.data;
 
-    el.addEventListener('pointerdown', (e) => {
-      if (READONLY) return;
-      dragging = true;
-      el.setPointerCapture?.(e.pointerId);
-      el.style.cursor = 'grabbing';
-      el.style.transform = 'none';
-
-      const r = el.getBoundingClientRect();
-      offsetX = e.clientX - r.left;
-      offsetY = e.clientY - r.top;
-      e.preventDefault();
-    });
-
-    el.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      const c = canvas.getBoundingClientRect();
-      let x = e.clientX - c.left - offsetX;
-      let y = e.clientY - c.top - offsetY;
-
-      x = clamp(x, EDGE_MARGIN, c.width - el.offsetWidth - EDGE_MARGIN);
-      y = clamp(y, EDGE_MARGIN, c.height - el.offsetHeight - EDGE_MARGIN);
-
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      syncPlacements();
-      e.preventDefault();
-    });
-
-    el.addEventListener('pointerup', (e) => {
-      if (!dragging) return;
-      dragging = false;
-      el.style.cursor = 'grab';
-
-      // 친구 목록에 드롭하면 되돌리기
-      const fl = friendList.getBoundingClientRect();
-      const inFriendList =
-        (e.clientX >= fl.left && e.clientX <= fl.right && e.clientY >= fl.top && e.clientY <= fl.bottom);
-
-      if (inFriendList){
-        const n = el.dataset.name;
-        el.remove();
-        if (window.addChipBack) window.addChipBack(n);
-        syncPlacements();
-        return;
+    for (let i = 0; i < d.length; i += 4){
+      const a = d[i + 3]; // 0~255
+      if (a > METABALL_THRESHOLD){
+        d[i]     = 90;
+        d[i + 1] = 90;
+        d[i + 2] = 90;
+        d[i + 3] = Math.min(110, 35 + (a - METABALL_THRESHOLD) * 1.1);
+      } else {
+        d[i + 3] = 0;
       }
-
-      syncPlacements();
-    });
+    }
+    fogCtx.putImageData(img, 0, 0);
   }
 
+  // ===============================
+  // 배치 데이터 저장(JSON hidden)
+  // ===============================
   function syncPlacements(){
     const cRect = canvas.getBoundingClientRect();
     const center = { x: cRect.width/2, y: cRect.height/2 };
@@ -258,18 +219,14 @@
 
     tokens.forEach(t => {
       const x = parseFloat(t.style.left || '0') + t.offsetWidth/2;
-      const y = parseFloat(t.style.top || '0') + t.offsetHeight/2;
+      const y = parseFloat(t.style.top  || '0') + t.offsetHeight/2;
       const relX = Math.round(x - center.x);
       const relY = Math.round(y - center.y);
-      const d = Math.sqrt(relX*relX + relY*relY);
-      out[t.dataset.name] = { x: relX, y: relY, d: Math.round(d*100)/100 };
+      const dist = Math.sqrt(relX*relX + relY*relY);
+      out[t.dataset.name] = { x: relX, y: relY, d: Math.round(dist*100)/100 };
     });
 
     placementsInput.value = JSON.stringify(out);
-
-    // ✅ 안개 갱신
-    renderFog();
-
     return out;
   }
 
@@ -284,11 +241,97 @@
     return confirm('제출하면 수정할 수 없어요. 제출할까요?');
   }
 
+  // ===============================
+  // 토큰 생성/드래그
+  // ===============================
+  function makeToken(name){
+    const el = document.createElement('div');
+    el.className = 'token';
+    el.dataset.name = name;
+    el.textContent = name;
+
+    el.style.fontWeight = '600';
+    el.style.fontSize = '12.5px';
+    el.style.fontFamily = 'sans-serif';
+    el.style.position = 'absolute';
+    el.style.left = '0px';
+    el.style.top  = '0px';
+    el.style.zIndex = '4';          // ✅ 안개 위
+    el.style.touchAction = 'none';
+    el.style.userSelect = 'none';
+    el.style.cursor = 'grab';
+
+    if (!READONLY) attachDrag(el);
+    return el;
+  }
+
+  function attachDrag(el){
+    let dragging = false;
+    let offsetX = 0, offsetY = 0;
+
+    el.addEventListener('pointerdown', (e) => {
+      if (READONLY) return;
+      dragging = true;
+      el.setPointerCapture?.(e.pointerId);
+      el.style.cursor = 'grabbing';
+      el.style.transform = 'none'; // 크기 변화 방지
+
+      const r = el.getBoundingClientRect();
+      offsetX = e.clientX - r.left;
+      offsetY = e.clientY - r.top;
+      e.preventDefault();
+    });
+
+    el.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+
+      const c = canvas.getBoundingClientRect();
+      let x = e.clientX - c.left - offsetX;
+      let y = e.clientY - c.top  - offsetY;
+
+      x = clamp(x, EDGE_MARGIN, c.width  - el.offsetWidth  - EDGE_MARGIN);
+      y = clamp(y, EDGE_MARGIN, c.height - el.offsetHeight - EDGE_MARGIN);
+
+      el.style.left = x + 'px';
+      el.style.top  = y + 'px';
+
+      syncPlacements();
+      renderFogLight(); // ✅ 드래그 중 가볍게
+      e.preventDefault();
+    });
+
+    el.addEventListener('pointerup', (e) => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.cursor = 'grab';
+
+      // 친구 목록에 드롭하면 되돌리기
+      const fl = friendList.getBoundingClientRect();
+      const inFriendList =
+        (e.clientX >= fl.left && e.clientX <= fl.right &&
+         e.clientY >= fl.top  && e.clientY <= fl.bottom);
+
+      if (inFriendList){
+        const n = el.dataset.name;
+        el.remove();
+        if (window.addChipBack) window.addChipBack(n);
+        syncPlacements();
+        renderFogMetaball(); // ✅ 놓는 순간 정리
+        return;
+      }
+
+      syncPlacements();
+      renderFogMetaball(); // ✅ 놓으면 뿌요뿌요
+    });
+  }
+
+  // ===============================
+  // 초기 복원
+  // ===============================
   function restoreInitial(){
     const cRect = canvas.getBoundingClientRect();
     const center = { x: cRect.width/2, y: cRect.height/2 };
 
-    // 초기 배치가 있으면 친구목록에서 제거
     const chips = Array.from(friendList.querySelectorAll('.chip'));
     chips.forEach(chip => {
       const n = chip.dataset.name;
@@ -297,13 +340,12 @@
       }
     });
 
-    // 토큰 복원
     if (initialPlacements){
       Object.keys(initialPlacements).forEach((n) => {
         const v = initialPlacements[n];
         const token = makeToken(n);
 
-        // 토큰이 DOM에 붙어야 offsetWidth/Height가 안정적이므로 먼저 붙이고 위치 조정
+        // 토큰 먼저 붙이고(offsetWidth 확보)
         canvas.appendChild(token);
 
         const px = clamp(center.x + (v.x || 0) - token.offsetWidth/2,
@@ -317,8 +359,12 @@
     }
 
     syncPlacements();
+    renderFogMetaball();
   }
 
+  // ===============================
+  // 칩 드래그(목록 → 캔버스)
+  // ===============================
   function enableChipDragToCanvas(){
     let draggingChip = null;
     let placeholder = null;
@@ -370,22 +416,25 @@
       const c = canvas.getBoundingClientRect();
       const token = makeToken(name);
 
-      let x = clientX - c.left - offsetX;
-      let y = clientY - c.top - offsetY;
-
-      // 먼저 붙여서 크기 확정
+      // 토큰을 먼저 붙여 width/height 확보
       canvas.appendChild(token);
 
-      x = clamp(x, EDGE_MARGIN, c.width - token.offsetWidth - EDGE_MARGIN);
+      let x = clientX - c.left - offsetX;
+      let y = clientY - c.top  - offsetY;
+
+      x = clamp(x, EDGE_MARGIN, c.width  - token.offsetWidth  - EDGE_MARGIN);
       y = clamp(y, EDGE_MARGIN, c.height - token.offsetHeight - EDGE_MARGIN);
 
       token.style.left = x + 'px';
       token.style.top  = y + 'px';
+
       syncPlacements();
+      renderFogMetaball();
     }
 
     function addChipBack(name){
       if (READONLY) return;
+
       const exists = Array.from(friendList.querySelectorAll('.chip')).some(c => c.dataset.name === name);
       if (exists) return;
 
@@ -423,7 +472,8 @@
     function onMove(e){
       if (!draggingChip) return;
       draggingChip.style.left = (e.clientX - offsetX) + 'px';
-      draggingChip.style.top = (e.clientY - offsetY) + 'px';
+      draggingChip.style.top  = (e.clientY - offsetY) + 'px';
+      renderFogLight(); // ✅ 드래그 중
       e.preventDefault();
     }
 
@@ -431,7 +481,9 @@
       if (!draggingChip) return;
 
       const c = canvas.getBoundingClientRect();
-      const inCanvas = (e.clientX >= c.left && e.clientX <= c.right && e.clientY >= c.top && e.clientY <= c.bottom);
+      const inCanvas =
+        (e.clientX >= c.left && e.clientX <= c.right &&
+         e.clientY >= c.top  && e.clientY <= c.bottom);
 
       if (inCanvas){
         placeTokenFromChip(draggingChip, e.clientX, e.clientY);
@@ -440,6 +492,8 @@
       }
 
       cleanup();
+      syncPlacements();
+      renderFogMetaball(); // ✅ 놓으면 뿌요뿌요
       e.preventDefault();
     }
 
@@ -470,7 +524,7 @@
 
       chip.style.position = 'fixed';
       chip.style.left = (e.clientX - offsetX) + 'px';
-      chip.style.top = (e.clientY - offsetY) + 'px';
+      chip.style.top  = (e.clientY - offsetY) + 'px';
       chip.style.zIndex = '9999';
       chip.style.width = r.width + 'px';
       chip.style.height = r.height + 'px';
@@ -491,18 +545,15 @@
 
   window.addEventListener('load', () => {
     enableChipDragToCanvas();
-
-    // ✅ fog canvas 사이즈 동기화 후 복원
+    resizeFog();
     setTimeout(() => {
-      resizeFogCanvas();
       restoreInitial();
-      renderFog();
     }, 0);
   });
 
   window.addEventListener('resize', () => {
-    resizeFogCanvas();
-    renderFog();
+    resizeFog();
+    renderFogMetaball();
   });
 </script>
 {% endblock %}
