@@ -73,7 +73,7 @@
         <div class="student-item">
           <div class="student-name"><span class="no">{{ r.no }}</span> {{ r.name }}</div>
           <div class="student-actions">
-            <a class="goto-btn" href="/teacher/class/{{ code }}/student/{{ r.url_name }}?sid={{ sid }}" title="학생 개별 페이지로 이동">↗</a>
+            <a class="goto-btn" href="/teacher/class/{{ code }}/result/{{ sid }}/{{ r.url_name }}" title="학생 결과 보기">↗</a>
             <span class="status">{{ r.status }}</span>
           </div>
         </div>
