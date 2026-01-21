@@ -873,6 +873,45 @@ def class_detail(code):
         session_links=session_links,
     )
 
+@app.route("/teacher/class/<code>/result/<sid>/<url_name>")
+def teacher_view_student_result(code, sid, url_name):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    sid = (sid or "1").strip()
+    if sid not in ["1","2","3","4","5"]:
+        sid = "1"
+
+    student_name = unquote(url_name).strip()
+
+    # 권한 확인 (해당 학급이 이 교사의 것인지)
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if cls == "FORBIDDEN" or not cls:
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+    # DB에서 학생 세션 가져오기
+    sess = db_get_student_session(code, student_name, sid)
+    if not sess:
+        return render_template(
+            "teacher_result_view.html",
+            code=code,
+            sid=sid,
+            student_name=student_name,
+            placements={},
+            submitted=False,
+            error="아직 제출된 데이터가 없습니다."
+        )
+
+    return render_template(
+        "teacher_result_view.html",
+        code=code,
+        sid=sid,
+        student_name=student_name,
+        placements=sess.get("placements") or {},
+        submitted=sess.get("submitted", False)
+    )
+
 
 @app.route("/s/<code>/<sid>", methods=["GET", "POST"])
 def student_enter_session(code, sid):
