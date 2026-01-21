@@ -10,7 +10,6 @@
     <span class="muted" style="margin-left:8px;">
       {{ session_meta.label if session_meta and session_meta.label else sid ~ '차' }}
     </span>
-
     {% if student_session.submitted %}
       <span class="status" style="margin-left:8px;">제출 완료</span>
     {% else %}
@@ -40,21 +39,15 @@
     <div style="display:grid; grid-template-columns: 1fr 260px; gap:12px; align-items:start;">
       <!-- 캔버스 -->
       <div>
-        <div id="canvas"
-             style="position:relative; height:clamp(360px, 62vh, 520px);
-                    border:1px solid #d1d5db; border-radius:12px; background:#fff;
-                    overflow:hidden; touch-action:none;">
+        <div id="canvas" style="position:relative; height:clamp(360px, 62vh, 520px); border:1px solid #d1d5db; border-radius:12px; background:#fff; overflow:hidden; touch-action:none;">
 
-          <!-- 군집(덩어리) 흐릿한 원 레이어: 토큰보다 뒤 -->
-          <svg id="clusterLayer"
-               style="position:absolute; inset:0; width:100%; height:100%;
-                      pointer-events:none; z-index:1;"></svg>
+          <!-- ✅ 안개(밀도) 레이어: 토큰보다 뒤 -->
+          <canvas id="fogLayer"
+                  style="position:absolute; inset:0; width:100%; height:100%;
+                         pointer-events:none; z-index:1;"></canvas>
 
-          <!-- 나(중앙 점) -->
-          <div id="selfDot"
-               style="position:absolute; left:50%; top:50%;
-                      transform:translate(-50%,-50%);
-                      pointer-events:none; z-index:3;">
+          <!-- 나(중앙점) -->
+          <div id="selfDot" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none; z-index:3;">
             <div style="width:18px; height:18px; border-radius:999px; background:#4a6cf7; margin:auto;"></div>
             <div style="font-size:12px; font-weight:800; margin-top:6px; text-align:center;">나</div>
           </div>
@@ -66,33 +59,30 @@
       </div>
 
       <!-- 친구 목록 -->
-      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd;
-                  height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
+      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd; height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
         <div style="font-weight:800; margin-bottom:10px;">친구 목록</div>
 
-        <div id="friendList"
-             style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start;
-                    flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable;">
+        <div id="friendList" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start; flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable;">
           {% for f in friends %}
             <div class="chip" data-name="{{ f }}"
                  style="user-select:none; cursor:grab; padding:8px 6px;
                         border-radius:10px; border:1px solid #d1d5db;
-                        background:#ffffff; font-weight:600; font-size:12.5px;
-                        font-family:sans-serif; text-align:center; touch-action:none;">
+                        background:#ffffff;
+                        font-weight:600;
+                        font-size:12.5px;
+                        font-family:sans-serif;
+                        text-align:center; touch-action:none;">
               {{ f }}
             </div>
           {% endfor %}
         </div>
 
         <hr style="border:none; border-top:1px solid #e5e7eb; margin:12px 0;">
-
         <div style="display:flex; gap:8px;">
-          {% if not student_session.submitted and not teacher_view %}
+          {% if not student_session.submitted %}
             <button type="submit" style="flex:1;">제출하기</button>
           {% else %}
-            <button type="button" disabled style="flex:1; opacity:0.6;">
-              {% if teacher_view %}열람 전용{% else %}제출 완료{% endif %}
-            </button>
+            <button type="button" disabled style="flex:1; opacity:0.6;">제출 완료</button>
           {% endif %}
         </div>
       </div>
@@ -111,31 +101,89 @@
 </style>
 
 <script>
-  // 교사용 열람(teacher_view) 이거나 제출 완료면 READONLY
-  const READONLY = {{ 'true' if (teacher_view or student_session.submitted) else 'false' }};
+  const READONLY = {{ 'true' if student_session.submitted else 'false' }};
   const friends = {{ friends|tojson }};
   const initialPlacements = {{ placements|tojson }};
 
   const canvas = document.getElementById('canvas');
   const friendList = document.getElementById('friendList');
   const placementsInput = document.getElementById('placements_json');
-  const clusterLayer = document.getElementById('clusterLayer');
+
+  // ✅ 안개 레이어
+  const fogLayer = document.getElementById('fogLayer');
+  const fogCtx = fogLayer ? fogLayer.getContext('2d') : null;
 
   function clamp(v, min, max){ return Math.min(Math.max(v, min), max); }
   const EDGE_MARGIN = 6;
+
+  // ----------------------------
+  // 안개(밀도) 파라미터
+  // ----------------------------
+  const FOG_RADIUS = 75;          // 퍼짐 정도(60~85 추천)
+  const FOG_ALPHA = 0.06;         // 바깥 알파(0.04~0.08 추천)
+  const FOG_CENTER_ALPHA = 0.09;  // 중심 알파(0.07~0.12 추천)
+
+  let fogRaf = null;
+
+  function resizeFogCanvas(){
+    if (!fogLayer || !fogCtx) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    fogLayer.width = Math.max(1, Math.floor(rect.width * dpr));
+    fogLayer.height = Math.max(1, Math.floor(rect.height * dpr));
+
+    // 좌표계를 CSS px로 맞춤 (이후 draw는 px 단위로)
+    fogCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function getTokenCenters(){
+    const tokens = Array.from(canvas.querySelectorAll('.token'));
+    return tokens.map(t => ({
+      x: (parseFloat(t.style.left || '0') + t.offsetWidth / 2),
+      y: (parseFloat(t.style.top || '0') + t.offsetHeight / 2),
+    }));
+  }
+
+  function renderFog(){
+    if (!fogLayer || !fogCtx) return;
+
+    if (fogRaf) cancelAnimationFrame(fogRaf);
+    fogRaf = requestAnimationFrame(() => {
+      fogRaf = null;
+
+      const rect = canvas.getBoundingClientRect();
+      fogCtx.clearRect(0, 0, rect.width, rect.height);
+
+      const pts = getTokenCenters();
+      if (pts.length === 0) return;
+
+      // 기본 source-over: 겹칠수록 자연스럽게 진해짐
+      for (const p of pts){
+        const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, FOG_RADIUS);
+        g.addColorStop(0.00, `rgba(90,90,90,${FOG_CENTER_ALPHA})`);
+        g.addColorStop(0.55, `rgba(90,90,90,${FOG_ALPHA})`);
+        g.addColorStop(1.00, `rgba(90,90,90,0.0)`);
+
+        fogCtx.fillStyle = g;
+        fogCtx.beginPath();
+        fogCtx.arc(p.x, p.y, FOG_RADIUS, 0, Math.PI * 2);
+        fogCtx.fill();
+      }
+    });
+  }
 
   function makeToken(name){
     const el = document.createElement('div');
     el.className = 'token';
     el.dataset.name = name;
-
     el.style.fontWeight = '600';
     el.style.fontSize = '12.5px';
     el.style.fontFamily = 'sans-serif';
 
-    // absolute + z-index: 군집(svg)보다 위로
+    // 드래그로 움직이려면 absolute
     el.style.position = 'absolute';
-    el.style.zIndex = '4';
+    el.style.zIndex = '4'; // ✅ 안개(1) / self(3) 위로
     el.style.left = '0px';
     el.style.top = '0px';
 
@@ -167,7 +215,6 @@
 
     el.addEventListener('pointermove', (e) => {
       if (!dragging) return;
-
       const c = canvas.getBoundingClientRect();
       let x = e.clientX - c.left - offsetX;
       let y = e.clientY - c.top - offsetY;
@@ -176,8 +223,7 @@
       y = clamp(y, EDGE_MARGIN, c.height - el.offsetHeight - EDGE_MARGIN);
 
       el.style.left = x + 'px';
-      el.style.top  = y + 'px';
-
+      el.style.top = y + 'px';
       syncPlacements();
       e.preventDefault();
     });
@@ -204,149 +250,15 @@
     });
   }
 
-  // ===============================
-  // 군집(덩어리) 시각화: 흐릿한 회색 그라데이션 원
-  // ===============================
-  const CLUSTER_LINK_THRESHOLD = 80; // 가까우면 같은 덩어리(픽셀)
-  const MIN_CLUSTER_SIZE = 3;        // 3명 이상 모이면 원 표시
-  const MIN_RADIUS = 38;            // 원 최소 크기
-  const EXTRA_RADIUS_PAD = 26;       // 덩어리 퍼짐에 추가 여유
-
-  function getTokenCenters(){
-    const tokens = Array.from(canvas.querySelectorAll('.token'));
-    return tokens.map(t => ({
-      name: t.dataset.name,
-      x: (parseFloat(t.style.left || '0') + t.offsetWidth / 2),
-      y: (parseFloat(t.style.top  || '0') + t.offsetHeight / 2),
-    }));
-  }
-
-  function computeClusters(centers){
-    const n = centers.length;
-    if (n === 0) return [];
-
-    const adj = Array.from({ length: n }, () => []);
-    for (let i=0; i<n; i++){
-      for (let j=i+1; j<n; j++){
-        const dx = centers[i].x - centers[j].x;
-        const dy = centers[i].y - centers[j].y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist <= CLUSTER_LINK_THRESHOLD){
-          adj[i].push(j);
-          adj[j].push(i);
-        }
-      }
-    }
-
-    const visited = new Array(n).fill(false);
-    const clusters = [];
-
-    for (let i=0; i<n; i++){
-      if (visited[i]) continue;
-      const stack = [i];
-      visited[i] = true;
-      const members = [];
-
-      while (stack.length){
-        const cur = stack.pop();
-        members.push(centers[cur]);
-        for (const nxt of adj[cur]){
-          if (!visited[nxt]){
-            visited[nxt] = true;
-            stack.push(nxt);
-          }
-        }
-      }
-      clusters.push(members);
-    }
-    return clusters;
-  }
-
-  function clusterCircle(members){
-    let cx = 0, cy = 0;
-    for (const p of members){ cx += p.x; cy += p.y; }
-    cx /= members.length; cy /= members.length;
-
-    let maxD = 0;
-    for (const p of members){
-      const dx = p.x - cx, dy = p.y - cy;
-      const d = Math.sqrt(dx*dx + dy*dy);
-      if (d > maxD) maxD = d;
-    }
-    const r = Math.max(MIN_RADIUS, maxD + EXTRA_RADIUS_PAD);
-    return { cx, cy, r };
-  }
-
-  function renderClusterHalos(){
-    if (!clusterLayer) return;
-
-    const centers = getTokenCenters();
-    const clusters = computeClusters(centers).filter(m => m.length >= MIN_CLUSTER_SIZE);
-
-    clusterLayer.innerHTML = "";
-    if (clusters.length === 0) return;
-
-    const SVGNS = "http://www.w3.org/2000/svg";
-
-    // defs(그라데이션)
-    const defs = document.createElementNS(SVGNS, "defs");
-
-    clusters.forEach((members, idx) => {
-      const grad = document.createElementNS(SVGNS, "radialGradient");
-      const gid = `haloGrad_${idx}`;
-      grad.setAttribute("id", gid);
-
-      const s1 = document.createElementNS(SVGNS, "stop");
-      s1.setAttribute("offset", "0%");
-      s1.setAttribute("stop-color", "#666");
-      s1.setAttribute("stop-opacity", "0.14");
-
-      const s2 = document.createElementNS(SVGNS, "stop");
-      s2.setAttribute("offset", "65%");
-      s2.setAttribute("stop-color", "#666");
-      s2.setAttribute("stop-opacity", "0.08");
-
-      const s3 = document.createElementNS(SVGNS, "stop");
-      s3.setAttribute("offset", "100%");
-      s3.setAttribute("stop-color", "#666");
-      s3.setAttribute("stop-opacity", "0.0");
-
-      grad.appendChild(s1);
-      grad.appendChild(s2);
-      grad.appendChild(s3);
-      defs.appendChild(grad);
-    });
-
-    clusterLayer.appendChild(defs);
-
-    // 원 그리기
-    clusters.forEach((members, idx) => {
-      const { cx, cy, r } = clusterCircle(members);
-
-      const circle = document.createElementNS(SVGNS, "circle");
-      circle.setAttribute("cx", String(cx));
-      circle.setAttribute("cy", String(cy));
-      circle.setAttribute("r",  String(r));
-      circle.setAttribute("fill", `url(#haloGrad_${idx})`);
-
-      circle.setAttribute("stroke", "none");
-      circle.removeAttribute("stroke-opacity");
-      circle.removeAttribute("stroke-width");
-
-
-      clusterLayer.appendChild(circle);
-    });
-  }
-
   function syncPlacements(){
     const cRect = canvas.getBoundingClientRect();
     const center = { x: cRect.width/2, y: cRect.height/2 };
     const out = {};
-
     const tokens = canvas.querySelectorAll('.token');
+
     tokens.forEach(t => {
       const x = parseFloat(t.style.left || '0') + t.offsetWidth/2;
-      const y = parseFloat(t.style.top  || '0') + t.offsetHeight/2;
+      const y = parseFloat(t.style.top || '0') + t.offsetHeight/2;
       const relX = Math.round(x - center.x);
       const relY = Math.round(y - center.y);
       const d = Math.sqrt(relX*relX + relY*relY);
@@ -354,13 +266,15 @@
     });
 
     placementsInput.value = JSON.stringify(out);
-    renderClusterHalos();
+
+    // ✅ 안개 갱신
+    renderFog();
+
     return out;
   }
 
   function onSubmitMeasure(){
     if (READONLY) return false;
-
     const p = syncPlacements();
     const missing = friends.filter(n => !p[n]);
     if (missing.length > 0){
@@ -374,17 +288,23 @@
     const cRect = canvas.getBoundingClientRect();
     const center = { x: cRect.width/2, y: cRect.height/2 };
 
-    // 초기 배치가 있는 친구는 목록에서 제거
+    // 초기 배치가 있으면 친구목록에서 제거
     const chips = Array.from(friendList.querySelectorAll('.chip'));
     chips.forEach(chip => {
       const n = chip.dataset.name;
-      if (initialPlacements && initialPlacements[n]) chip.remove();
+      if (initialPlacements && initialPlacements[n]){
+        chip.remove();
+      }
     });
 
+    // 토큰 복원
     if (initialPlacements){
       Object.keys(initialPlacements).forEach((n) => {
         const v = initialPlacements[n];
         const token = makeToken(n);
+
+        // 토큰이 DOM에 붙어야 offsetWidth/Height가 안정적이므로 먼저 붙이고 위치 조정
+        canvas.appendChild(token);
 
         const px = clamp(center.x + (v.x || 0) - token.offsetWidth/2,
                          EDGE_MARGIN, cRect.width - token.offsetWidth - EDGE_MARGIN);
@@ -393,7 +313,6 @@
 
         token.style.left = px + 'px';
         token.style.top  = py + 'px';
-        canvas.appendChild(token);
       });
     }
 
@@ -452,15 +371,16 @@
       const token = makeToken(name);
 
       let x = clientX - c.left - offsetX;
-      let y = clientY - c.top  - offsetY;
+      let y = clientY - c.top - offsetY;
+
+      // 먼저 붙여서 크기 확정
+      canvas.appendChild(token);
 
       x = clamp(x, EDGE_MARGIN, c.width - token.offsetWidth - EDGE_MARGIN);
       y = clamp(y, EDGE_MARGIN, c.height - token.offsetHeight - EDGE_MARGIN);
 
       token.style.left = x + 'px';
       token.style.top  = y + 'px';
-      canvas.appendChild(token);
-
       syncPlacements();
     }
 
@@ -472,7 +392,6 @@
       const chip = document.createElement('div');
       chip.className = 'chip';
       chip.dataset.name = name;
-
       chip.style.userSelect = 'none';
       chip.style.cursor = 'grab';
       chip.style.padding = '8px 6px';
@@ -486,7 +405,6 @@
       chip.style.touchAction = 'none';
       chip.textContent = name;
 
-      // 원래 순서대로 삽입
       const chips = Array.from(friendList.querySelectorAll('.chip'));
       const myIdx = friends.indexOf(name);
       let inserted = false;
@@ -505,7 +423,7 @@
     function onMove(e){
       if (!draggingChip) return;
       draggingChip.style.left = (e.clientX - offsetX) + 'px';
-      draggingChip.style.top  = (e.clientY - offsetY) + 'px';
+      draggingChip.style.top = (e.clientY - offsetY) + 'px';
       e.preventDefault();
     }
 
@@ -529,7 +447,6 @@
 
     friendList.addEventListener('pointerdown', (e) => {
       if (READONLY) return;
-
       const chip = e.target.closest('.chip');
       if (!chip) return;
 
@@ -542,7 +459,6 @@
       offsetY = e.clientY - r.top;
 
       originParent = chip.parentElement;
-
       placeholder = document.createElement('div');
       placeholder.style.width = r.width + 'px';
       placeholder.style.height = r.height + 'px';
@@ -554,7 +470,7 @@
 
       chip.style.position = 'fixed';
       chip.style.left = (e.clientX - offsetX) + 'px';
-      chip.style.top  = (e.clientY - offsetY) + 'px';
+      chip.style.top = (e.clientY - offsetY) + 'px';
       chip.style.zIndex = '9999';
       chip.style.width = r.width + 'px';
       chip.style.height = r.height + 'px';
@@ -575,7 +491,18 @@
 
   window.addEventListener('load', () => {
     enableChipDragToCanvas();
-    setTimeout(restoreInitial, 0);
+
+    // ✅ fog canvas 사이즈 동기화 후 복원
+    setTimeout(() => {
+      resizeFogCanvas();
+      restoreInitial();
+      renderFog();
+    }, 0);
+  });
+
+  window.addEventListener('resize', () => {
+    resizeFogCanvas();
+    renderFog();
   });
 </script>
 {% endblock %}
