@@ -23,6 +23,13 @@
     <div class="error">{{ error }}</div>
   {% endif %}
 
+  {% if teacher_view %}
+  <div class="subtitle" style="text-align:center; margin-bottom:12px;">
+    교사용 열람 화면입니다. (수정/제출 불가)
+  </div>
+  {% endif %}
+
+  
   <form method="post" id="measureForm" onsubmit="return onSubmitMeasure();">
     <input type="hidden" name="placements_json" id="placements_json" value="">
 
