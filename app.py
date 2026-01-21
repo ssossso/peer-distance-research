@@ -133,6 +133,43 @@ def db_get_student_session(class_code: str, student_name: str, sid: str):
         "submitted": bool(row.submitted)
     }
 
+def db_delete_class_for_teacher(class_code: str, teacher_username: str) -> bool:
+    """
+    교사 본인 소유의 학급만 삭제. 관련 데이터(students, student_sessions)도 함께 삭제.
+    성공 True / 실패 False
+    """
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    class_code = (class_code or "").upper().strip()
+
+    with engine.begin() as conn:
+        # 권한 확인
+        row = conn.execute(text("""
+            SELECT 1
+            FROM classes
+            WHERE code = :code AND teacher_username = :t
+            LIMIT 1
+        """), {"code": class_code, "t": teacher_username}).fetchone()
+
+        if not row:
+            return False
+
+        # 자식 테이블부터 삭제 (FK가 없어도 안전)
+        conn.execute(text("DELETE FROM student_sessions WHERE class_code = :code"), {"code": class_code})
+        conn.execute(text("DELETE FROM students WHERE class_code = :code"), {"code": class_code})
+
+        # 교사 배치 관련(있으면 같이 삭제)
+        conn.execute(text("DELETE FROM teacher_placement_runs WHERE class_code = :code"), {"code": class_code})
+
+        # 마지막으로 classes 삭제
+        conn.execute(text("DELETE FROM classes WHERE code = :code AND teacher_username = :t"), {
+            "code": class_code,
+            "t": teacher_username
+        })
+
+    return True
+
 
 def db_create_class(teacher_username: str, class_code: str, class_name: str, students: list[dict]):
     """
@@ -760,6 +797,25 @@ def create_class():
 
 
     return render_template("create_class.html")
+
+# ---------- 학급 삭제 ----------
+@app.route("/teacher/class/delete", methods=["POST"])
+def teacher_delete_class():
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (request.form.get("code") or "").upper().strip()
+    if not code:
+        return redirect("/teacher/dashboard")
+
+    try:
+        ok = db_delete_class_for_teacher(code, session["teacher"])
+        # 실패해도 대시보드로 복귀(권한 없거나 이미 삭제된 경우)
+        return redirect("/teacher/dashboard")
+    except Exception as e:
+        # 필요하면 dashboard에 에러 표시로 확장 가능
+        return redirect("/teacher/dashboard")
+
 
 # ---------- 학급 상세 ----------
 @app.route("/teacher/class/<code>")
