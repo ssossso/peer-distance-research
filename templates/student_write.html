@@ -329,9 +329,10 @@
       circle.setAttribute("r",  String(r));
       circle.setAttribute("fill", `url(#haloGrad_${idx})`);
 
-      circle.setAttribute("stroke", "#777");
-      circle.setAttribute("stroke-opacity", "0.06");
-      circle.setAttribute("stroke-width", "1");
+      circle.setAttribute("stroke", "none");
+      circle.removeAttribute("stroke-opacity");
+      circle.removeAttribute("stroke-width");
+
 
       clusterLayer.appendChild(circle);
     });
