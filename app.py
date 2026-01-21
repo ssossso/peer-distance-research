@@ -25,17 +25,15 @@ def init_db():
     if not engine:
         return
 
-    # engine.begin(): 중간에 문제가 생기면 자동으로 롤백(되돌림)됨
-    with engine.begin() as conn:
-        conn.execute(text("""
+    statements = [
+        """
         CREATE TABLE IF NOT EXISTS teachers (
             id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         );
-        """))
-
-        conn.execute(text("""
+        """,
+        """
         CREATE TABLE IF NOT EXISTS classes (
             id SERIAL PRIMARY KEY,
             code TEXT UNIQUE NOT NULL,
@@ -43,66 +41,54 @@ def init_db():
             teacher_username TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         );
-        """))
-
-        conn.execute(text("""
+        """,
+        """
         CREATE TABLE IF NOT EXISTS students (
             id SERIAL PRIMARY KEY,
             class_code TEXT NOT NULL,
             student_no TEXT,
             name TEXT NOT NULL
         );
-        """))
-
-        conn.execute(text("""
+        """,
+        """
         CREATE TABLE IF NOT EXISTS student_sessions (
             id SERIAL PRIMARY KEY,
             class_code TEXT NOT NULL,
+            sid TEXT NOT NULL,
             student_name TEXT NOT NULL,
-            session_id TEXT NOT NULL,
-            placements JSONB,
+            placements_json TEXT NOT NULL,
+            confidence INTEGER,
+            priority INTEGER,
             submitted BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         );
-        """))
-
-        conn.execute(text("""
+        """,
+        """
         CREATE UNIQUE INDEX IF NOT EXISTS uq_students_class_name
-        ON students (class_code, name);
-        """))
-
-        # ✅ 여기부터: 교사 배치/판단 기록 테이블 추가 (반드시 init_db 안)
-        conn.execute(text("""
+        ON student_sessions (class_code, sid, student_name);
+        """,
+        """
         CREATE TABLE IF NOT EXISTS teacher_placement_runs (
             id SERIAL PRIMARY KEY,
             class_code TEXT NOT NULL,
-            teacher_username TEXT NOT NULL,
             session_id TEXT NOT NULL,
-            condition TEXT NOT NULL,                 -- BASELINE / TOOL_ASSISTED
-            tool_run_id INTEGER,
-            placements JSONB,
-            started_at TIMESTAMP DEFAULT NOW(),
-            ended_at TIMESTAMP,
-            duration_ms INTEGER,
-            confidence_score INTEGER,
-            submitted BOOLEAN DEFAULT FALSE
+            teacher_username TEXT NOT NULL,
+            placements_json TEXT NOT NULL,
+            submitted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
         );
-        """))
-
-        conn.execute(text("""
+        """,
+        """
         CREATE TABLE IF NOT EXISTS teacher_decisions (
             id SERIAL PRIMARY KEY,
-            run_id INTEGER NOT NULL REFERENCES teacher_placement_runs(id) ON DELETE CASCADE,
-            target_student_name TEXT NOT NULL,
-            priority_rank INTEGER NOT NULL,
-            decision_confidence INTEGER,
-            reason_tags JSONB
+            class_code TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            teacher_username TEXT NOT NULL,
+            decision_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
         );
-        """))
-        # ✅ 여기까지
-
-                # ✅ 분석 결과 캐시 (요청 시 계산 + 캐시)
-        conn.execute(text("""
+        """,
+        """
         CREATE TABLE IF NOT EXISTS analysis_cache (
             id SERIAL PRIMARY KEY,
             class_code TEXT NOT NULL,
@@ -112,10 +98,16 @@ def init_db():
             updated_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(class_code, session_id, cache_key)
         );
-        """))
+        """,
+    ]
 
-    # (선택) 명시적으로 종료를 드러내고 싶다면 return을 둬도 됩니다.
+    # engine.begin(): 중간에 문제가 생기면 자동으로 롤백(되돌림)됨
+    with engine.begin() as conn:
+        for stmt in statements:
+            conn.execute(text(stmt))
+
     return
+
 
 
 def db_get_student_session(class_code: str, student_name: str, sid: str):
