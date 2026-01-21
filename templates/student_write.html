@@ -112,18 +112,31 @@
 
   // ===============================
   // 안개(드래그 중: Light / 놓으면: Metaball)
+  // - "정지 vs 드래그" 범위 차이를 줄이기 위해:
+  //   * Light/Metaball 반경을 "같은 기준"으로 맞춤
+  //   * Metaball은 rAF로 스로틀
   // ===============================
   let fogRaf = null;
 
-  // Light fog (드래그 중)
-  const FOG_RADIUS = 80;
-  const FOG_CENTER_ALPHA = 0.12;
-  const FOG_ALPHA = 0.06;
+  // ✅ 범위 일관성용 공통 반경(중간값)
+  const FOG_BASE_RADIUS = 78;
+
+  // Light fog (드래그 중) : 더 가볍게(얇게)
+  const LIGHT_RADIUS = FOG_BASE_RADIUS;         // 동일 반경
+  const LIGHT_CENTER_ALPHA = 0.10;
+  const LIGHT_MID_ALPHA    = 0.05;
 
   // Metaball fog (놓으면 뿌요뿌요)
-  const METABALL_THRESHOLD = 42;    // 낮을수록 더 쉽게 붙음
-  const METABALL_BLUR_RADIUS = 85;  // 퍼짐 반경
-  const METABALL_STRENGTH = 0.11;   // 중심 농도
+  // (중요) 누적 강도/threshold/soft edge의 균형으로 "범위 튐"을 줄임
+  const META_RADIUS = FOG_BASE_RADIUS;          // 동일 반경
+  const META_FIELD_STRENGTH = 0.16;             // 필드 누적 강도(너무 낮으면 들쭉날쭉)
+  const META_THRESHOLD = 34;                    // 낮을수록 잘 붙음(너무 낮으면 과도 확장)
+  const META_SOFT_EDGE = 62;                    // 경계 부드러움(클수록 더 그라데이션)
+  const META_MAX_ALPHA = 105;                   // 최종 안개 진하기(80~130)
+  const META_RGB = 90;                          // 회색 톤
+
+  // 드래그 중이냐(가벼운 안개) / 놓은 뒤냐(뿌요뿌요)
+  let isDraggingSomething = false;
 
   function resizeFog(){
     if (!fogLayer) return;
@@ -141,30 +154,37 @@
     }));
   }
 
-  function renderFogLight(){
+  function scheduleFog(kind){
     if (!fogLayer || !fogCtx) return;
 
+    // kind: 'light' | 'meta'
     if (fogRaf) cancelAnimationFrame(fogRaf);
     fogRaf = requestAnimationFrame(() => {
       fogRaf = null;
-
-      const w = fogLayer.width, h = fogLayer.height;
-      fogCtx.clearRect(0, 0, w, h);
-
-      const pts = getTokenCenters();
-      if (pts.length === 0) return;
-
-      for (const p of pts){
-        const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, FOG_RADIUS);
-        g.addColorStop(0.00, `rgba(90,90,90,${FOG_CENTER_ALPHA})`);
-        g.addColorStop(0.55, `rgba(90,90,90,${FOG_ALPHA})`);
-        g.addColorStop(1.00, `rgba(90,90,90,0.0)`);
-        fogCtx.fillStyle = g;
-        fogCtx.beginPath();
-        fogCtx.arc(p.x, p.y, FOG_RADIUS, 0, Math.PI * 2);
-        fogCtx.fill();
-      }
+      if (kind === 'light') renderFogLight();
+      else renderFogMetaball();
     });
+  }
+
+  function renderFogLight(){
+    if (!fogLayer || !fogCtx) return;
+
+    const w = fogLayer.width, h = fogLayer.height;
+    fogCtx.clearRect(0, 0, w, h);
+
+    const pts = getTokenCenters();
+    if (pts.length === 0) return;
+
+    for (const p of pts){
+      const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, LIGHT_RADIUS);
+      g.addColorStop(0.00, `rgba(${META_RGB},${META_RGB},${META_RGB},${LIGHT_CENTER_ALPHA})`);
+      g.addColorStop(0.55, `rgba(${META_RGB},${META_RGB},${META_RGB},${LIGHT_MID_ALPHA})`);
+      g.addColorStop(1.00, `rgba(${META_RGB},${META_RGB},${META_RGB},0.0)`);
+      fogCtx.fillStyle = g;
+      fogCtx.beginPath();
+      fogCtx.arc(p.x, p.y, LIGHT_RADIUS, 0, Math.PI * 2);
+      fogCtx.fill();
+    }
   }
 
   function renderFogMetaball(){
@@ -176,13 +196,13 @@
     const pts = getTokenCenters();
     if (pts.length === 0) return;
 
-    // 1) 흰 필드 누적(겹치면 밝아짐)
+    // 1) 누적 필드 (겹치면 a가 증가)
     fogCtx.globalCompositeOperation = 'source-over';
     for (const p of pts){
-      const r = METABALL_BLUR_RADIUS;
+      const r = META_RADIUS;
       const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-      g.addColorStop(0.00, `rgba(255,255,255,${METABALL_STRENGTH})`);
-      g.addColorStop(0.55, `rgba(255,255,255,${METABALL_STRENGTH * 0.6})`);
+      g.addColorStop(0.00, `rgba(255,255,255,${META_FIELD_STRENGTH})`);
+      g.addColorStop(0.60, `rgba(255,255,255,${META_FIELD_STRENGTH * 0.55})`);
       g.addColorStop(1.00, `rgba(255,255,255,0.0)`);
       fogCtx.fillStyle = g;
       fogCtx.beginPath();
@@ -190,42 +210,32 @@
       fogCtx.fill();
     }
 
-    // 2) Soft threshold: 경계가 서서히 사라지게(그라데이션)
-      const img = fogCtx.getImageData(0, 0, w, h);
-      const d = img.data;
+    // 2) Soft threshold + 회색화 + 그라데이션 가장자리
+    const img = fogCtx.getImageData(0, 0, w, h);
+    const d = img.data;
 
-// threshold 주변에서 부드럽게 페이드되는 폭(픽셀 알파 기준)
-      const SOFT_EDGE = 55;          // 30~80 권장 (클수록 더 부드러운 경계)
-      const MAX_ALPHA = 110;         // 최종 덩어리 진하기(0~255, 80~130 권장)
-      const BASE_RGB = 90;           // 회색 톤
+    for (let i = 0; i < d.length; i += 4){
+      const a = d[i + 3]; // 누적된 필드(0~255)
 
-      for (let i = 0; i < d.length; i += 4){
-        const a = d[i + 3]; // 누적된 필드(0~255)
+      if (a <= META_THRESHOLD){
+        d[i + 3] = 0;
+        continue;
+      }
 
-  // a가 threshold보다 작으면 완전 투명
-        if (a <= METABALL_THRESHOLD){
-          d[i + 3] = 0;
-          continue;
-  }
+      let t = (a - META_THRESHOLD) / META_SOFT_EDGE;
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
 
-  // threshold를 넘은 구간에서 alpha를 0~MAX_ALPHA로 점진 증가
-  // t = 0 (경계) -> 1 (경계+SOFT_EDGE 이상)
-        let t = (a - METABALL_THRESHOLD) / SOFT_EDGE;
-        if (t < 0) t = 0;
-        if (t > 1) t = 1;
+      // smootherstep
+      t = t * t * (3 - 2 * t);
 
-  // smootherstep으로 더 자연스럽게(부드러운 S-curve)
-  // t = t*t*(3-2t)
-        t = t * t * (3 - 2 * t);
+      d[i]     = META_RGB;
+      d[i + 1] = META_RGB;
+      d[i + 2] = META_RGB;
+      d[i + 3] = Math.round(t * META_MAX_ALPHA);
+    }
 
-        d[i]     = BASE_RGB;
-        d[i + 1] = BASE_RGB;
-        d[i + 2] = BASE_RGB;
-        d[i + 3] = Math.round(t * MAX_ALPHA);
-}
-
-fogCtx.putImageData(img, 0, 0);
-
+    fogCtx.putImageData(img, 0, 0);
   }
 
   // ===============================
@@ -292,9 +302,10 @@ fogCtx.putImageData(img, 0, 0);
     el.addEventListener('pointerdown', (e) => {
       if (READONLY) return;
       dragging = true;
+      isDraggingSomething = true;
       el.setPointerCapture?.(e.pointerId);
       el.style.cursor = 'grabbing';
-      el.style.transform = 'none'; // 크기 변화 방지
+      el.style.transform = 'none';
 
       const r = el.getBoundingClientRect();
       offsetX = e.clientX - r.left;
@@ -316,13 +327,14 @@ fogCtx.putImageData(img, 0, 0);
       el.style.top  = y + 'px';
 
       syncPlacements();
-      renderFogLight(); // ✅ 드래그 중 가볍게
+      scheduleFog('light'); // ✅ 드래그 중 가볍게
       e.preventDefault();
     });
 
     el.addEventListener('pointerup', (e) => {
       if (!dragging) return;
       dragging = false;
+      isDraggingSomething = false;
       el.style.cursor = 'grab';
 
       // 친구 목록에 드롭하면 되돌리기
@@ -336,12 +348,18 @@ fogCtx.putImageData(img, 0, 0);
         el.remove();
         if (window.addChipBack) window.addChipBack(n);
         syncPlacements();
-        renderFogMetaball(); // ✅ 놓는 순간 정리
+        scheduleFog('meta');
         return;
       }
 
       syncPlacements();
-      renderFogMetaball(); // ✅ 놓으면 뿌요뿌요
+      scheduleFog('meta'); // ✅ 놓으면 뿌요뿌요
+    });
+
+    el.addEventListener('pointercancel', () => {
+      dragging = false;
+      isDraggingSomething = false;
+      scheduleFog('meta');
     });
   }
 
@@ -379,7 +397,7 @@ fogCtx.putImageData(img, 0, 0);
     }
 
     syncPlacements();
-    renderFogMetaball();
+    scheduleFog('meta');
   }
 
   // ===============================
@@ -436,7 +454,6 @@ fogCtx.putImageData(img, 0, 0);
       const c = canvas.getBoundingClientRect();
       const token = makeToken(name);
 
-      // 토큰을 먼저 붙여 width/height 확보
       canvas.appendChild(token);
 
       let x = clientX - c.left - offsetX;
@@ -449,7 +466,7 @@ fogCtx.putImageData(img, 0, 0);
       token.style.top  = y + 'px';
 
       syncPlacements();
-      renderFogMetaball();
+      scheduleFog('meta');
     }
 
     function addChipBack(name){
@@ -493,7 +510,7 @@ fogCtx.putImageData(img, 0, 0);
       if (!draggingChip) return;
       draggingChip.style.left = (e.clientX - offsetX) + 'px';
       draggingChip.style.top  = (e.clientY - offsetY) + 'px';
-      renderFogLight(); // ✅ 드래그 중
+      scheduleFog('light');
       e.preventDefault();
     }
 
@@ -513,11 +530,14 @@ fogCtx.putImageData(img, 0, 0);
 
       cleanup();
       syncPlacements();
-      renderFogMetaball(); // ✅ 놓으면 뿌요뿌요
+      scheduleFog('meta');
       e.preventDefault();
     }
 
-    function onCancel(){ cleanup(); }
+    function onCancel(){
+      cleanup();
+      scheduleFog('meta');
+    }
 
     friendList.addEventListener('pointerdown', (e) => {
       if (READONLY) return;
@@ -566,6 +586,8 @@ fogCtx.putImageData(img, 0, 0);
   window.addEventListener('load', () => {
     enableChipDragToCanvas();
     resizeFog();
+
+    // 초기 1회는 meta로 (정지 상태 기준)
     setTimeout(() => {
       restoreInitial();
     }, 0);
@@ -573,7 +595,7 @@ fogCtx.putImageData(img, 0, 0);
 
   window.addEventListener('resize', () => {
     resizeFog();
-    renderFogMetaball();
+    scheduleFog(isDraggingSomething ? 'light' : 'meta');
   });
 </script>
 {% endblock %}
