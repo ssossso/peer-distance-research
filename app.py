@@ -70,34 +70,35 @@ def init_db():
         CREATE UNIQUE INDEX IF NOT EXISTS uq_students_class_name
         ON students (class_code, name);
         """))
+                conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS teacher_placement_runs (
+            id SERIAL PRIMARY KEY,
+            class_code TEXT NOT NULL,
+            teacher_username TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            condition TEXT NOT NULL,                 -- BASELINE / TOOL_ASSISTED
+            tool_run_id INTEGER,
+            placements JSONB,
+            started_at TIMESTAMP DEFAULT NOW(),
+            ended_at TIMESTAMP,
+            duration_ms INTEGER,
+            confidence_score INTEGER,
+            submitted BOOLEAN DEFAULT FALSE
+        );
+        """))
 
-conn.execute(text("""
-CREATE TABLE IF NOT EXISTS teacher_placement_runs (
-    id SERIAL PRIMARY KEY,
-    class_code TEXT NOT NULL,
-    teacher_username TEXT NOT NULL,
-    session_id TEXT NOT NULL,                -- "1"~"5"
-    condition TEXT NOT NULL,                 -- "BASELINE" / "TOOL_ASSISTED"
-    tool_run_id INTEGER,                     -- 나중에 clustering/perception run id 연결(없으면 NULL)
-    placements JSONB,                        -- 학생과 동일 포맷: {"이름": {"x":..,"y":..,"d":..}, ...}
-    started_at TIMESTAMP DEFAULT NOW(),
-    ended_at TIMESTAMP,
-    duration_ms INTEGER,
-    confidence_score INTEGER,                -- 1~7 추천
-    submitted BOOLEAN DEFAULT FALSE
-);
-"""))
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS teacher_decisions (
+            id SERIAL PRIMARY KEY,
+            run_id INTEGER NOT NULL REFERENCES teacher_placement_runs(id) ON DELETE CASCADE,
+            target_student_name TEXT NOT NULL,
+            priority_rank INTEGER NOT NULL,
+            decision_confidence INTEGER,
+            reason_tags JSONB
+        );
+        """))
 
-conn.execute(text("""
-CREATE TABLE IF NOT EXISTS teacher_decisions (
-    id SERIAL PRIMARY KEY,
-    run_id INTEGER NOT NULL REFERENCES teacher_placement_runs(id) ON DELETE CASCADE,
-    target_student_name TEXT NOT NULL,
-    priority_rank INTEGER NOT NULL,          -- 1..N
-    decision_confidence INTEGER,             -- 선택(1~7)
-    reason_tags JSONB                         -- 선택(["고립","주변화"...] 같은 태그)
-);
-"""))
+
 
 
 
