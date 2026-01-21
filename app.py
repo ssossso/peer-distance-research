@@ -883,34 +883,52 @@ def teacher_view_student_result(code, sid, url_name):
     if sid not in ["1","2","3","4","5"]:
         sid = "1"
 
-    student_name = unquote(url_name).strip()
+    student_name = (unquote(url_name) or "").strip()
 
     # 권한 확인 (해당 학급이 이 교사의 것인지)
     cls = db_get_class_for_teacher(code, session["teacher"])
     if cls == "FORBIDDEN" or not cls:
         return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
 
-    # DB에서 학생 세션 가져오기
-    sess = db_get_student_session(code, student_name, sid)
-    if not sess:
-        return render_template(
-            "teacher_result_view.html",
-            code=code,
-            sid=sid,
-            student_name=student_name,
-            placements={},
-            submitted=False,
-            error="아직 제출된 데이터가 없습니다."
-        )
+    # ✅ student_write.html이 필요로 하는 friends 만들기
+    students = db_get_students_in_class(code)
+    all_names = [s["name"] for s in students]
 
+    if student_name not in all_names:
+        return "학생을 찾을 수 없습니다.", 404
+
+    friends = [n for n in all_names if n != student_name]
+
+    # ✅ DB에서 학생 세션 가져오기
+    sess = db_get_student_session(code, student_name, sid)
+    placements = (sess.get("placements") if sess else {}) or {}
+
+    # ✅ 교사 열람은 무조건 읽기 전용으로 잠금
+    # student_write.html은 student_session.submitted 값으로 READONLY를 결정하는 구조(당신 teacher_write.html도 동일)
+    student_session = {"placements": placements, "submitted": True}
+
+    # ✅ session_meta(라벨) 제공: student_write()가 하는 방식과 동일하게 ensure_class_schema 사용
+    cls_for_view = ensure_class_schema({
+        "code": code,
+        "name": db_get_class_name(code) or code,
+        "teacher": session["teacher"],
+        "sessions": {}
+    })
+    session_meta = cls_for_view.get("sessions", {}).get(sid, {"label": f"{sid}차"})
+
+    # ✅ 기존 학생 화면을 그대로 렌더링
+    # (템플릿 새로 만들지 않음)
     return render_template(
-        "teacher_result_view.html",
-        code=code,
+        "student_write.html",
+        name=student_name,
+        friends=friends,
+        placements=placements,
+        student_session=student_session,
         sid=sid,
-        student_name=student_name,
-        placements=sess.get("placements") or {},
-        submitted=sess.get("submitted", False)
+        session_meta=session_meta,
+        teacher_view=True  # (선택) 템플릿에서 '교사용 열람' 문구 표시 용도
     )
+
 
 
 @app.route("/s/<code>/<sid>", methods=["GET", "POST"])
