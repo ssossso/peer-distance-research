@@ -155,7 +155,7 @@
     });
   }
 
-  function renderFogMetaballNow(){
+    function renderFogMetaballNow(){
     if (!fogLayer || !fogCtx) return;
 
     const w = fogLayer.width, h = fogLayer.height;
@@ -166,6 +166,9 @@
       // ✅ 토큰이 없으면 Fog 자체를 꺼버림
       return;
     }
+
+    // ✅ 중심점(나)도 다른 토큰과 동일하게 fog 생성에 포함
+    pts.push({ name: '__self__', x: w / 2, y: h / 2 });
 
     // 1) 흰 필드 누적(겹치면 더 진해짐)
     fogCtx.globalCompositeOperation = 'source-over';
@@ -180,6 +183,7 @@
       fogCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
       fogCtx.fill();
     }
+
 
     // 2) Soft threshold: 경계가 서서히 사라지는 그라데이션 덩어리
     const img = fogCtx.getImageData(0, 0, w, h);
