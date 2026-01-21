@@ -111,38 +111,24 @@
   const EDGE_MARGIN = 6;
 
   // ===============================
-  // 안개(드래그 중: Light / 놓으면: Metaball)
-  // - "정지 vs 드래그" 범위 차이를 줄이기 위해:
-  //   * Light/Metaball 반경을 "같은 기준"으로 맞춤
-  //   * Metaball은 rAF로 스로틀
+  // Fog: "드롭했을 때만" Metaball 렌더
+  // - 캔버스에 토큰이 없으면 Fog OFF
+  // - 드래그 중에는 Fog 건드리지 않음(이전 상태 유지)
   // ===============================
+  const META_THRESHOLD = 28;      // ✅ 요청값
+  const META_RADIUS = 78;         // 메타볼 퍼짐 반경(범위는 이 값이 결정)
+  const META_STRENGTH = 0.11;     // 누적 필드 농도(필드 쌓임)
+  const META_SOFT_EDGE = 55;      // 경계 부드러움(클수록 더 그라데이션)
+  const META_MAX_ALPHA = 90;      // ✅ 요청값(최종 진하기)
+  const FOG_GRAY = 90;            // 회색 톤
+
   let fogRaf = null;
-
-  // ✅ 범위 일관성용 공통 반경(중간값)
-  const FOG_BASE_RADIUS = 78;
-
-  // Light fog (드래그 중) : 더 가볍게(얇게)
-  const LIGHT_RADIUS = FOG_BASE_RADIUS;         // 동일 반경
-  const LIGHT_CENTER_ALPHA = 0.10;
-  const LIGHT_MID_ALPHA    = 0.05;
-
-  // Metaball fog (놓으면 뿌요뿌요)
-  // (중요) 누적 강도/threshold/soft edge의 균형으로 "범위 튐"을 줄임
-  const META_RADIUS = FOG_BASE_RADIUS;          // 동일 반경
-  const META_FIELD_STRENGTH = 0.16;             // 필드 누적 강도(너무 낮으면 들쭉날쭉)
-  const META_THRESHOLD = 34;                    // 낮을수록 잘 붙음(너무 낮으면 과도 확장)
-  const META_SOFT_EDGE = 62;                    // 경계 부드러움(클수록 더 그라데이션)
-  const META_MAX_ALPHA = 105;                   // 최종 안개 진하기(80~130)
-  const META_RGB = 90;                          // 회색 톤
-
-  // 드래그 중이냐(가벼운 안개) / 놓은 뒤냐(뿌요뿌요)
-  let isDraggingSomething = false;
 
   function resizeFog(){
     if (!fogLayer) return;
     const r = canvas.getBoundingClientRect();
-    fogLayer.width = Math.floor(r.width);
-    fogLayer.height = Math.floor(r.height);
+    fogLayer.width = Math.max(1, Math.floor(r.width));
+    fogLayer.height = Math.max(1, Math.floor(r.height));
   }
 
   function getTokenCenters(){
@@ -154,55 +140,40 @@
     }));
   }
 
-  function scheduleFog(kind){
+  function clearFog(){
+    if (!fogLayer || !fogCtx) return;
+    fogCtx.clearRect(0, 0, fogLayer.width, fogLayer.height);
+  }
+
+  function scheduleMetaballFog(){
     if (!fogLayer || !fogCtx) return;
 
-    // kind: 'light' | 'meta'
     if (fogRaf) cancelAnimationFrame(fogRaf);
     fogRaf = requestAnimationFrame(() => {
       fogRaf = null;
-      if (kind === 'light') renderFogLight();
-      else renderFogMetaball();
+      renderFogMetaballNow();
     });
   }
 
-  function renderFogLight(){
+  function renderFogMetaballNow(){
     if (!fogLayer || !fogCtx) return;
 
     const w = fogLayer.width, h = fogLayer.height;
     fogCtx.clearRect(0, 0, w, h);
 
     const pts = getTokenCenters();
-    if (pts.length === 0) return;
-
-    for (const p of pts){
-      const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, LIGHT_RADIUS);
-      g.addColorStop(0.00, `rgba(${META_RGB},${META_RGB},${META_RGB},${LIGHT_CENTER_ALPHA})`);
-      g.addColorStop(0.55, `rgba(${META_RGB},${META_RGB},${META_RGB},${LIGHT_MID_ALPHA})`);
-      g.addColorStop(1.00, `rgba(${META_RGB},${META_RGB},${META_RGB},0.0)`);
-      fogCtx.fillStyle = g;
-      fogCtx.beginPath();
-      fogCtx.arc(p.x, p.y, LIGHT_RADIUS, 0, Math.PI * 2);
-      fogCtx.fill();
+    if (pts.length === 0) {
+      // ✅ 토큰이 없으면 Fog 자체를 꺼버림
+      return;
     }
-  }
 
-  function renderFogMetaball(){
-    if (!fogLayer || !fogCtx) return;
-
-    const w = fogLayer.width, h = fogLayer.height;
-    fogCtx.clearRect(0, 0, w, h);
-
-    const pts = getTokenCenters();
-    if (pts.length === 0) return;
-
-    // 1) 누적 필드 (겹치면 a가 증가)
+    // 1) 흰 필드 누적(겹치면 더 진해짐)
     fogCtx.globalCompositeOperation = 'source-over';
     for (const p of pts){
       const r = META_RADIUS;
       const g = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-      g.addColorStop(0.00, `rgba(255,255,255,${META_FIELD_STRENGTH})`);
-      g.addColorStop(0.60, `rgba(255,255,255,${META_FIELD_STRENGTH * 0.55})`);
+      g.addColorStop(0.00, `rgba(255,255,255,${META_STRENGTH})`);
+      g.addColorStop(0.55, `rgba(255,255,255,${META_STRENGTH * 0.6})`);
       g.addColorStop(1.00, `rgba(255,255,255,0.0)`);
       fogCtx.fillStyle = g;
       fogCtx.beginPath();
@@ -210,12 +181,12 @@
       fogCtx.fill();
     }
 
-    // 2) Soft threshold + 회색화 + 그라데이션 가장자리
+    // 2) Soft threshold: 경계가 서서히 사라지는 그라데이션 덩어리
     const img = fogCtx.getImageData(0, 0, w, h);
     const d = img.data;
 
     for (let i = 0; i < d.length; i += 4){
-      const a = d[i + 3]; // 누적된 필드(0~255)
+      const a = d[i + 3]; // 누적 필드(0~255)
 
       if (a <= META_THRESHOLD){
         d[i + 3] = 0;
@@ -229,9 +200,9 @@
       // smootherstep
       t = t * t * (3 - 2 * t);
 
-      d[i]     = META_RGB;
-      d[i + 1] = META_RGB;
-      d[i + 2] = META_RGB;
+      d[i]     = FOG_GRAY;
+      d[i + 1] = FOG_GRAY;
+      d[i + 2] = FOG_GRAY;
       d[i + 3] = Math.round(t * META_MAX_ALPHA);
     }
 
@@ -302,10 +273,9 @@
     el.addEventListener('pointerdown', (e) => {
       if (READONLY) return;
       dragging = true;
-      isDraggingSomething = true;
       el.setPointerCapture?.(e.pointerId);
       el.style.cursor = 'grabbing';
-      el.style.transform = 'none';
+      el.style.transform = 'none'; // 크기 변화 방지
 
       const r = el.getBoundingClientRect();
       offsetX = e.clientX - r.left;
@@ -326,15 +296,14 @@
       el.style.left = x + 'px';
       el.style.top  = y + 'px';
 
+      // ✅ 드래그 중에는 Fog를 건드리지 않음(이전 상태 유지)
       syncPlacements();
-      scheduleFog('light'); // ✅ 드래그 중 가볍게
       e.preventDefault();
     });
 
     el.addEventListener('pointerup', (e) => {
       if (!dragging) return;
       dragging = false;
-      isDraggingSomething = false;
       el.style.cursor = 'grab';
 
       // 친구 목록에 드롭하면 되돌리기
@@ -348,18 +317,18 @@
         el.remove();
         if (window.addChipBack) window.addChipBack(n);
         syncPlacements();
-        scheduleFog('meta');
+
+        // ✅ 캔버스에 토큰이 없으면 Fog OFF
+        const left = canvas.querySelectorAll('.token').length;
+        if (left === 0) clearFog();
+        else scheduleMetaballFog();
+
         return;
       }
 
       syncPlacements();
-      scheduleFog('meta'); // ✅ 놓으면 뿌요뿌요
-    });
-
-    el.addEventListener('pointercancel', () => {
-      dragging = false;
-      isDraggingSomething = false;
-      scheduleFog('meta');
+      // ✅ 놓는 순간만 Metaball(뿌요뿌요)
+      scheduleMetaballFog();
     });
   }
 
@@ -397,7 +366,11 @@
     }
 
     syncPlacements();
-    scheduleFog('meta');
+
+    // ✅ 초기에도 토큰이 있으면 Metaball, 없으면 Fog OFF
+    const count = canvas.querySelectorAll('.token').length;
+    if (count === 0) clearFog();
+    else scheduleMetaballFog();
   }
 
   // ===============================
@@ -454,6 +427,7 @@
       const c = canvas.getBoundingClientRect();
       const token = makeToken(name);
 
+      // 토큰을 먼저 붙여 width/height 확보
       canvas.appendChild(token);
 
       let x = clientX - c.left - offsetX;
@@ -466,7 +440,7 @@
       token.style.top  = y + 'px';
 
       syncPlacements();
-      scheduleFog('meta');
+      scheduleMetaballFog(); // ✅ 드롭했으니 뿌요뿌요
     }
 
     function addChipBack(name){
@@ -510,7 +484,7 @@
       if (!draggingChip) return;
       draggingChip.style.left = (e.clientX - offsetX) + 'px';
       draggingChip.style.top  = (e.clientY - offsetY) + 'px';
-      scheduleFog('light');
+      // ✅ 목록 드래그 중에도 Fog 건드리지 않음
       e.preventDefault();
     }
 
@@ -529,15 +503,11 @@
       }
 
       cleanup();
-      syncPlacements();
-      scheduleFog('meta');
+      // ✅ 드롭 안 했으면 Fog 변화 없음
       e.preventDefault();
     }
 
-    function onCancel(){
-      cleanup();
-      scheduleFog('meta');
-    }
+    function onCancel(){ cleanup(); }
 
     friendList.addEventListener('pointerdown', (e) => {
       if (READONLY) return;
@@ -586,16 +556,15 @@
   window.addEventListener('load', () => {
     enableChipDragToCanvas();
     resizeFog();
-
-    // 초기 1회는 meta로 (정지 상태 기준)
-    setTimeout(() => {
-      restoreInitial();
-    }, 0);
+    setTimeout(() => { restoreInitial(); }, 0);
   });
 
   window.addEventListener('resize', () => {
     resizeFog();
-    scheduleFog(isDraggingSomething ? 'light' : 'meta');
+    // ✅ 리사이즈 시에도 "토큰이 있으면"만 유지 렌더
+    const count = canvas.querySelectorAll('.token').length;
+    if (count === 0) clearFog();
+    else scheduleMetaballFog();
   });
 </script>
 {% endblock %}
