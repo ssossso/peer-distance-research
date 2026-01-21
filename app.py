@@ -1275,6 +1275,38 @@ def analysis_student_avg(code, sid):
     cache_set(code, sid, cache_key, payload)
     return jsonify(payload)
 
+@app.route("/analysis/class/<code>/<sid>/student/<path:student_name>/vs_avg.json")
+def analysis_student_vs_avg(code, sid, student_name):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    sid = (sid or "1").strip()
+    if sid not in ["1","2","3","4","5"]:
+        sid = "1"
+
+    # URL 인코딩된 이름 복원
+    student_name = unquote(student_name or "").strip()
+
+    # 교사 권한 확인: 해당 학급 소유자만 조회 가능
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if cls == "FORBIDDEN" or not cls:
+        return jsonify({"error": "forbidden"}), 403
+
+    if not student_name:
+        return jsonify({"error": "student_name required"}), 400
+
+    cache_key = f"student_vs_avg_{sid}_{student_name}"
+    cached = cache_get(code, sid, cache_key)
+    if cached:
+        return jsonify(cached)
+
+    payload = student_vs_avg_distance_payload(code, sid, student_name)
+    if not payload:
+        return jsonify({"error": "not found"}), 404
+
+    cache_set(code, sid, cache_key, payload)
+    return jsonify(payload)
 
 def points_from_student_session(placements: dict, names: list[str], self_name: str):
     """
@@ -1371,6 +1403,123 @@ def student_avg_distance_payload(class_code: str, sid: str):
         "submitted_students": used_students,
         "avg_distance_matrix": avgD,
         "mds_2d": [{"x": X[i][0], "y": X[i][1]} for i in range(len(X))],
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+def student_vs_avg_distance_payload(class_code: str, sid: str, student_name: str):
+
+def student_vs_avg_distance_payload(class_code: str, sid: str, student_name: str):
+    """
+    개별 학생(1명)의 거리행렬 vs 학생 평균 거리행렬(avgD) 비교 지표 생성.
+    - 진단/평가 목적 아님
+    - '차이의 크기/방향'을 구조적으로 요약하기 위한 용도
+    """
+    students = db_get_students_in_class(class_code)
+    names = [s["name"] for s in students]
+    if not names or student_name not in names:
+        return None
+
+    # 1) 평균 거리행렬 불러오기(캐시 우선)
+    avg_cache_key = f"student_avg_{sid}"
+    avg_payload = cache_get(class_code, sid, avg_cache_key)
+    if not avg_payload:
+        avg_payload = student_avg_distance_payload(class_code, sid)
+
+    avgD = avg_payload.get("avg_distance_matrix") or []
+    if not avgD:
+        return {
+            "class_code": class_code,
+            "session_id": sid,
+            "student_name": student_name,
+            "error": "avg_distance_matrix empty",
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+    # 2) 해당 학생 세션 로드 (제출된 것만 비교 대상으로)
+    ss = db_get_student_session(class_code, student_name, sid)
+    if not ss:
+        return None
+    if not ss.get("submitted"):
+        return {
+            "class_code": class_code,
+            "session_id": sid,
+            "student_name": student_name,
+            "error": "student session not submitted",
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+    placements = ss.get("placements") or {}
+    pts, valid = points_from_student_session(placements, names, self_name=student_name)
+    Ds = distance_matrix(pts, valid)
+
+    # 3) pairwise 차이 계산 (None은 제외)
+    n = len(names)
+    diffs = []
+    abs_diffs = []
+
+    used_pairs = 0
+    total_pairs = 0
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            total_pairs += 1
+            v_s = Ds[i][j]
+            v_a = avgD[i][j] if (i < len(avgD) and j < len(avgD[i])) else None
+            if isinstance(v_s, (int, float)) and isinstance(v_a, (int, float)):
+                d = float(v_s) - float(v_a)
+                diffs.append(d)
+                abs_diffs.append(abs(d))
+                used_pairs += 1
+
+    if used_pairs == 0:
+        return {
+            "class_code": class_code,
+            "session_id": sid,
+            "student_name": student_name,
+            "n_total_students": n,
+            "n_pairs_total": total_pairs,
+            "n_pairs_used": 0,
+            "error": "no comparable pairs",
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+    mean_abs = sum(abs_diffs) / len(abs_diffs)
+    mean_signed = sum(diffs) / len(diffs)
+    var_abs = sum((x - mean_abs) ** 2 for x in abs_diffs) / len(abs_diffs)
+
+    # 4) self(응답자) 기준: "내가 본 거리"가 평균과 어떻게 다른지 (자세히 보기용)
+    self_idx = names.index(student_name)
+    self_peer_diffs = []
+    for j in range(n):
+        if j == self_idx:
+            continue
+        v_s = Ds[self_idx][j]
+        v_a = avgD[self_idx][j] if (self_idx < len(avgD) and j < len(avgD[self_idx])) else None
+        if isinstance(v_s, (int, float)) and isinstance(v_a, (int, float)):
+            self_peer_diffs.append({
+                "peer": names[j],
+                "student_dist": round(float(v_s), 6),
+                "avg_dist": round(float(v_a), 6),
+                "diff": round(float(v_s) - float(v_a), 6),  # (+)면 학생이 더 멀게 인식
+                "abs_diff": round(abs(float(v_s) - float(v_a)), 6),
+            })
+
+    # abs_diff 큰 순으로 정렬(설명용)
+    self_peer_diffs.sort(key=lambda x: x["abs_diff"], reverse=True)
+
+    return {
+        "class_code": class_code,
+        "session_id": sid,
+        "student_name": student_name,
+        "n_total_students": n,
+        "n_pairs_total": total_pairs,
+        "n_pairs_used": used_pairs,
+        # 핵심 요약 지표(7번)
+        "mean_abs_diff": round(mean_abs, 6),
+        "var_abs_diff": round(var_abs, 6),
+        "mean_signed_diff": round(mean_signed, 6),  # (+)면 평균보다 전반적으로 멀게 배치 경향
+        # 자세히 보기용(교사에게 근거 제공)
+        "self_peer_diffs_top": self_peer_diffs[:10],
         "generated_at": datetime.utcnow().isoformat() + "Z",
     }
 
