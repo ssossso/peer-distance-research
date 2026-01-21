@@ -65,12 +65,14 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         );
         """))
-        
+
         conn.execute(text("""
         CREATE UNIQUE INDEX IF NOT EXISTS uq_students_class_name
         ON students (class_code, name);
         """))
-                conn.execute(text("""
+
+        # ✅ 여기부터: 교사 배치/판단 기록 테이블 추가 (반드시 init_db 안)
+        conn.execute(text("""
         CREATE TABLE IF NOT EXISTS teacher_placement_runs (
             id SERIAL PRIMARY KEY,
             class_code TEXT NOT NULL,
@@ -97,8 +99,7 @@ def init_db():
             reason_tags JSONB
         );
         """))
-
-
+        # ✅ 여기까지
 
 
 
