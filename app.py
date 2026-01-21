@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, redirect, session, send_file
+from flask import Flask, render_template, request, redirect, session, send_file, jsonify
 import random, string, json, os
 from datetime import timedelta
 from urllib.parse import quote, unquote
@@ -101,6 +101,21 @@ def init_db():
         """))
         # ✅ 여기까지
 
+                # ✅ 분석 결과 캐시 (요청 시 계산 + 캐시)
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS analysis_cache (
+            id SERIAL PRIMARY KEY,
+            class_code TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            cache_key TEXT NOT NULL,      -- 예: avg_map, teacher_run_123, student_avg_dist
+            payload JSONB,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(class_code, session_id, cache_key)
+        );
+        """))
+
+    # (선택) 명시적으로 종료를 드러내고 싶다면 return을 둬도 됩니다.
+    return
 
 
 def db_get_student_session(class_code: str, student_name: str, sid: str):
@@ -110,6 +125,7 @@ def db_get_student_session(class_code: str, student_name: str, sid: str):
     """
     if not engine:
         return None
+
 
     with engine.connect() as conn:
         row = conn.execute(text("""
@@ -1193,6 +1209,33 @@ def teacher_placement_complete(run_id):
     return render_template("teacher_complete.html", run=run)
 
 
+@app.route("/analysis/class/<code>/<sid>/teacher_run/<int:run_id>.json")
+def analysis_teacher_run(code, sid, run_id):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    sid = (sid or "1").strip()
+
+    run = db_get_teacher_run(run_id)
+    if (not run) or run["class_code"] != code or run["session_id"] != sid:
+        return jsonify({"error": "run not found"}), 404
+    if run["teacher_username"] != session["teacher"]:
+        return jsonify({"error": "forbidden"}), 403
+
+    cache_key = f"teacher_run_{run_id}"
+    cached = cache_get(code, sid, cache_key)
+    if cached:
+        return jsonify(cached)
+
+    payload = teacher_run_distance_payload(code, sid, run_id)
+    if not payload:
+        return jsonify({"error": "failed"}), 500
+
+    cache_set(code, sid, cache_key, payload)
+    return jsonify(payload)
+
+
 # ---------- 학생 입장 ----------
 @app.route("/student", methods=["GET", "POST"])
 def student_enter():
@@ -1255,7 +1298,6 @@ def student_enter():
 
 
 # ---------- 학생 글쓰기 ----------
-@app.route("/student/write", methods=["GET", "POST"])
 @app.route("/student/write", methods=["GET", "POST"])
 def student_write():
     if "code" not in session or "name" not in session:
@@ -1449,6 +1491,228 @@ def student_write():
         sid=sid,
         session_meta=cls.get("sessions", {}).get(sid, {}),
     )
+
+import math
+from datetime import datetime
+
+def cache_get(class_code: str, sid: str, key: str):
+    if not engine:
+        return None
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT payload
+            FROM analysis_cache
+            WHERE class_code=:c AND session_id=:s AND cache_key=:k
+            LIMIT 1
+        """), {"c": class_code, "s": sid, "k": key}).fetchone()
+    return row.payload if row else None
+
+def cache_set(class_code: str, sid: str, key: str, payload: dict):
+    if not engine:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO analysis_cache (class_code, session_id, cache_key, payload, updated_at)
+            VALUES (:c, :s, :k, :p, NOW())
+            ON CONFLICT (class_code, session_id, cache_key)
+            DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+        """), {"c": class_code, "s": sid, "k": key, "p": json.dumps(payload, ensure_ascii=False)})
+
+def _extract_point(v, canvas_w=None, canvas_h=None):
+    """
+    placements의 한 항목 v에서 2D point를 뽑는다.
+    - 신규(abs): {x,y,w,h,mode:'abs'} => (x/w, y/h)로 정규화
+    - 구버전(rel): {x,y,d,...} => (x,y) 그대로 사용 (스케일은 후처리에서 자동 정규화)
+    """
+    if not isinstance(v, dict):
+        return None
+
+    mode = v.get("mode")
+    x = v.get("x")
+    y = v.get("y")
+    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+        return None
+
+    if mode == "abs":
+        w = v.get("w") if isinstance(v.get("w"), (int, float)) else canvas_w
+        h = v.get("h") if isinstance(v.get("h"), (int, float)) else canvas_h
+        if not (isinstance(w, (int, float)) and w > 0 and isinstance(h, (int, float)) and h > 0):
+            # w/h가 없다면 abs를 그대로 쓰되, 이후 정규화에서 처리
+            return (float(x), float(y), "abs_raw")
+        return (float(x) / float(w), float(y) / float(h), "abs_norm")
+
+    # rel(구버전): 중심 기준 상대좌표
+    return (float(x), float(y), "rel")
+
+def points_from_placements_all_students(placements: dict, names: list[str]):
+    """
+    교사 배치: 모든 학생이 placements에 있어야 함(프론트에서 강제).
+    그래도 안전하게 None 체크.
+    반환: points(list[(x,y)]), valid_mask(list[bool])
+    """
+    pts = []
+    valid = []
+    for nm in names:
+        p = _extract_point(placements.get(nm))
+        if p is None:
+            pts.append((0.0, 0.0))
+            valid.append(False)
+        else:
+            pts.append((p[0], p[1]))
+            valid.append(True)
+
+    # abs_raw/rel 스케일 차이를 줄이기 위해, 전체를 한 번 정규화:
+    # - bbox 기준으로 0~1 스케일로 맞춰줌(방향은 의미 없고 거리만 쓰므로 안전)
+    xs = [pts[i][0] for i in range(len(pts)) if valid[i]]
+    ys = [pts[i][1] for i in range(len(pts)) if valid[i]]
+    if len(xs) >= 2 and len(ys) >= 2:
+        minx, maxx = min(xs), max(xs)
+        miny, maxy = min(ys), max(ys)
+        rx = (maxx - minx) if (maxx - minx) > 1e-9 else 1.0
+        ry = (maxy - miny) if (maxy - miny) > 1e-9 else 1.0
+        pts = [((x - minx)/rx, (y - miny)/ry) for (x, y) in pts]
+    return pts, valid
+
+def distance_matrix(points: list[tuple[float,float]], valid: list[bool]):
+    """
+    NxN 거리행렬. 유효하지 않은 노드가 있으면 해당 row/col은 None 처리.
+    반환: matrix(list[list[float|None]])
+    """
+    n = len(points)
+    D = [[None]*n for _ in range(n)]
+    for i in range(n):
+        if not valid[i]: 
+            continue
+        D[i][i] = 0.0
+        xi, yi = points[i]
+        for j in range(i+1, n):
+            if not valid[j]:
+                continue
+            xj, yj = points[j]
+            d = math.hypot(xi-xj, yi-yj)
+            d = round(d, 6)
+            D[i][j] = d
+            D[j][i] = d
+    return D
+
+def mean_distance_matrix(mats: list[list[list[float|None]]]):
+    """
+    여러 거리행렬의 pairwise mean(결측(None)은 제외).
+    반환: avgD
+    """
+    if not mats:
+        return []
+    n = len(mats[0])
+    avg = [[None]*n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            vals = []
+            for M in mats:
+                v = M[i][j]
+                if isinstance(v, (int, float)):
+                    vals.append(float(v))
+            if vals:
+                avg[i][j] = round(sum(vals)/len(vals), 6)
+    # 대각 0 보정
+    for i in range(n):
+        avg[i][i] = 0.0
+    return avg
+
+def classical_mds_2d(D: list[list[float|None]]):
+    """
+    Classical MDS(2D). 결측이 있으면 평균으로 대체해 단순히 수행(교사 전원배치에서는 결측 없어야 정상).
+    반환: coords(list[(x,y)])
+    """
+    n = len(D)
+    if n == 0:
+        return []
+
+    # 1) 결측 대체(가장 안전한 최소 구현): row 평균
+    filled = [[0.0]*n for _ in range(n)]
+    for i in range(n):
+        row_vals = [D[i][j] for j in range(n) if isinstance(D[i][j], (int,float)) and i != j]
+        row_mean = (sum(row_vals)/len(row_vals)) if row_vals else 0.0
+        for j in range(n):
+            v = D[i][j]
+            filled[i][j] = float(v) if isinstance(v, (int,float)) else float(row_mean)
+
+    # 2) double-centering: B = -0.5 * J * (D^2) * J
+    #    (numpy 없이 순수 파이썬으로 구현)
+    D2 = [[filled[i][j]**2 for j in range(n)] for i in range(n)]
+
+    row_mean = [sum(D2[i])/n for i in range(n)]
+    col_mean = [sum(D2[i][j] for i in range(n))/n for j in range(n)]
+    total_mean = sum(row_mean)/n
+
+    B = [[-0.5 * (D2[i][j] - row_mean[i] - col_mean[j] + total_mean) for j in range(n)] for i in range(n)]
+
+    # 3) eigen decomposition (간단히 power iteration 2회로 2축 근사)
+    #    안정성을 위해 매우 작은 구현: 2개 축만 구함
+    def matvec(M, v):
+        return [sum(M[i][k]*v[k] for k in range(n)) for i in range(n)]
+
+    def dot(a,b): 
+        return sum(a[i]*b[i] for i in range(n))
+
+    def norm(v):
+        return math.sqrt(dot(v,v)) + 1e-12
+
+    def power_iter(M, iters=80):
+        v = [1.0/math.sqrt(n)]*n
+        for _ in range(iters):
+            w = matvec(M, v)
+            nv = norm(w)
+            v = [x/nv for x in w]
+        lam = dot(v, matvec(M, v))
+        return lam, v
+
+    # 첫 축
+    lam1, v1 = power_iter(B)
+    # deflation
+    B2 = [[B[i][j] - lam1*v1[i]*v1[j] for j in range(n)] for i in range(n)]
+    # 둘째 축
+    lam2, v2 = power_iter(B2)
+
+    lam1 = max(lam1, 0.0)
+    lam2 = max(lam2, 0.0)
+
+    s1 = math.sqrt(lam1)
+    s2 = math.sqrt(lam2)
+
+    coords = [(round(v1[i]*s1, 6), round(v2[i]*s2, 6)) for i in range(n)]
+    return coords
+
+def teacher_run_distance_payload(class_code: str, sid: str, run_id: int):
+    """
+    teacher_placement_runs(run_id)의 placements로:
+    - points(정규화)
+    - 거리행렬
+    - (선택) MDS 좌표
+    를 산출하여 payload 반환
+    """
+    run = db_get_teacher_run(run_id)
+    if not run:
+        return None
+    placements = run["placements"] or {}
+
+    students = db_get_students_in_class(class_code)
+    names = [s["name"] for s in students]
+
+    pts, valid = points_from_placements_all_students(placements, names)
+    D = distance_matrix(pts, valid)
+    X = classical_mds_2d(D)
+
+    return {
+        "class_code": class_code,
+        "session_id": sid,
+        "run_id": run_id,
+        "names": names,
+        "points_norm": [{"x": pts[i][0], "y": pts[i][1], "valid": bool(valid[i])} for i in range(len(names))],
+        "distance_matrix": D,
+        "mds_2d": [{"x": X[i][0], "y": X[i][1]} for i in range(len(names))],
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
 
 
 # ---------- 제출 완료 ----------
