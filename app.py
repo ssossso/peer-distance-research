@@ -263,6 +263,34 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 def make_session_permanent() -> None:
     session.permanent = True
 
+# -------------------------
+# Research admin (owner-only)
+# -------------------------
+ADMIN_USERS = {
+    u.strip()
+    for u in (os.environ.get("ADMIN_USERS", "") or "").split(",")
+    if u.strip()
+}
+
+def require_admin():
+    """
+    Owner-only research/admin pages.
+    - Must be logged in as teacher.
+    - Username must be in ADMIN_USERS (env var, comma-separated).
+    """
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    if ADMIN_USERS and session.get("teacher") not in ADMIN_USERS:
+        # 권한 없음
+        return "forbidden", 403
+
+    # ADMIN_USERS가 비어있으면(환경변수 미설정) 안전하게 막고 싶다면 아래 주석 해제:
+    # if not ADMIN_USERS:
+    #     return "forbidden (ADMIN_USERS not set)", 403
+
+    return None
+
 
 SITE_TITLE = "내가 바라본 우리 반"
 
