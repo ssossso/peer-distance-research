@@ -50,56 +50,66 @@
 </div>
 
 <style>
-  .pw-row{
-    display:flex;
-    gap:8px;
-    align-items:center;
-  }
-  .pw-input{
-    flex:1;
+  /* input 안에 아이콘을 넣기 위한 래퍼 */
+  .pw-wrap{
+    position: relative;
+    width: 100%;
   }
 
-  /* 버튼은 "아이콘만" 깔끔하게 */
-  .pw-toggle{
-    width:44px;
-    height:40px;
-    padding:0;
-    border-radius:10px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-
-    /* base.html 버튼 스타일이 있다면 과도하게 튀지 않게 */
-    background:#fff;
-    border:1px solid #d1d5db;
-    cursor:pointer;
-
-    /* 색상만 미세 변화 */
-    color:#6b7280; /* muted */
+  /* 아이콘이 들어갈 공간 확보(오른쪽 padding) */
+  .pw-input-in{
+    width: 100%;
+    padding-right: 44px; /* 아이콘 자리 */
+    box-sizing: border-box;
   }
 
-  .pw-toggle:hover{
-    color:#111827; /* 조금 더 진하게 */
+  /* input 오른쪽 끝에 겹쳐지는 아이콘 버튼 */
+  .pw-in-toggle{
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    background: transparent;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+    color: #6b7280; /* 기본: 회색 */
   }
 
-  .pw-toggle:focus-visible{
-    outline:2px solid rgba(59, 130, 246, 0.35);
-    outline-offset:2px;
-    color:#111827;
+  /* hover 시 아이콘 색: 회색 -> 검정 */
+  .pw-in-toggle:hover{
+    color: #111827;
+  }
+
+  /* 키보드 접근성: 포커스 링 */
+  .pw-in-toggle:focus-visible{
+    outline: 2px solid rgba(59, 130, 246, 0.35);
+    outline-offset: 2px;
+    border-radius: 8px;
+    color: #111827;
   }
 
   /* SVG 크기/정렬 안정 */
   .eye-icon svg{
-    display:block;
+    display: block;
   }
 
   /* 터치 시 확대/튀는 효과 방지 */
-  .pw-toggle, .pw-toggle *{
+  .pw-in-toggle, .pw-in-toggle *{
     -webkit-tap-highlight-color: transparent;
     transform: none !important;
     transition: none !important;
   }
 </style>
+
 
 <script>
   (function(){
