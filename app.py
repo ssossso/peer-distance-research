@@ -29,8 +29,17 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from urllib.parse import quote, unquote
 from werkzeug.security import check_password_hash, generate_password_hash
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
+try:
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_AVAILABLE = True
+except ModuleNotFoundError:
+    Workbook = None  # type: ignore
+    OPENPYXL_AVAILABLE = False
+
+    def get_column_letter(_n: int) -> str:  # fallback (should not be used if guarded)
+        return "A"
+
 
 
 # -------------------------
@@ -1008,6 +1017,9 @@ def research_admin():
 @app.route("/research/export/student_sessions.xlsx")
 def export_student_sessions_xlsx():
     guard = require_admin()
+    if not OPENPYXL_AVAILABLE:
+    return "openpyxl not installed on server", 500
+  
     if guard is not None:
         return guard
 
