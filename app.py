@@ -153,6 +153,9 @@ def init_db() -> None:
                 created_at TIMESTAMP DEFAULT NOW()
             );
             """,
+            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS sid TEXT;",
+            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS student_name TEXT;",
+
             """
             CREATE UNIQUE INDEX IF NOT EXISTS uq_student_sessions
             ON student_sessions (class_code, sid, student_name);
