@@ -29,6 +29,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from urllib.parse import quote, unquote
 from werkzeug.security import check_password_hash, generate_password_hash
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+
 
 # -------------------------
 # Database bootstrap
@@ -290,6 +293,96 @@ def require_admin():
     #     return "forbidden (ADMIN_USERS not set)", 403
 
     return None
+
+# -------------------------
+# Research admin: XLSX helpers + overview fetch
+# -------------------------
+
+def _xlsx_response(wb: Workbook, filename: str):
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(
+        bio,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+def _autosize_columns(ws):
+    # 단순 자동 폭 (완벽하진 않지만 연구용엔 충분)
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            try:
+                v = "" if cell.value is None else str(cell.value)
+            except Exception:
+                v = ""
+            if len(v) > max_len:
+                max_len = len(v)
+        ws.column_dimensions[col_letter].width = min(max_len + 2, 60)
+
+def db_fetch_class_overview() -> List[Dict[str, Any]]:
+    """
+    연구/관리 페이지에서 '지금 바로 연결 가능한' 요약 데이터:
+    - classes 목록
+    - 학생 수
+    - student_sessions: sid별 제출/전체
+    - teacher_placement_runs: session_id별 제출/전체
+    """
+    if not engine:
+        return []
+
+    with engine.connect() as conn:
+        classes = conn.execute(text("""
+            SELECT code, name, teacher_username, created_at
+            FROM classes
+            ORDER BY id DESC
+        """)).fetchall()
+
+        out: List[Dict[str, Any]] = []
+        for c in classes:
+            student_cnt = conn.execute(text("""
+                SELECT COUNT(*) AS n FROM students WHERE class_code = :code
+            """), {"code": c.code}).fetchone().n
+
+            ss_rows = conn.execute(text("""
+                SELECT sid,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN submitted THEN 1 ELSE 0 END) AS submitted
+                FROM student_sessions
+                WHERE class_code = :code
+                GROUP BY sid
+                ORDER BY sid::int
+            """), {"code": c.code}).fetchall()
+
+            tr_rows = conn.execute(text("""
+                SELECT session_id,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN submitted THEN 1 ELSE 0 END) AS submitted
+                FROM teacher_placement_runs
+                WHERE class_code = :code
+                GROUP BY session_id
+                ORDER BY session_id::int
+            """), {"code": c.code}).fetchall()
+
+            out.append({
+                "code": c.code,
+                "name": c.name,
+                "teacher_username": c.teacher_username,
+                "created_at": c.created_at,
+                "student_count": int(student_cnt or 0),
+                "student_sessions": [
+                    {"sid": r.sid, "total": int(r.total or 0), "submitted": int(r.submitted or 0)}
+                    for r in ss_rows
+                ],
+                "teacher_runs": [
+                    {"session_id": r.session_id, "total": int(r.total or 0), "submitted": int(r.submitted or 0)}
+                    for r in tr_rows
+                ],
+            })
+        return out
 
 
 SITE_TITLE = "내가 바라본 우리 반"
@@ -894,6 +987,169 @@ def teacher_login():
 def teacher_logout():
     session.clear()
     return redirect("/")
+
+# -------------------------
+# Research admin pages (owner-only)
+# -------------------------
+
+@app.route("/research")
+def research_admin():
+    guard = require_admin()
+    if guard is not None:
+        return guard
+
+    if not engine:
+        return render_template("research_admin.html", db_ready=False, overview=[])
+
+    overview = db_fetch_class_overview()
+    return render_template("research_admin.html", db_ready=True, overview=overview)
+
+
+@app.route("/research/export/student_sessions.xlsx")
+def export_student_sessions_xlsx():
+    guard = require_admin()
+    if guard is not None:
+        return guard
+
+    if not engine:
+        return "DB not configured", 400
+
+    class_code = (request.args.get("class_code") or "").strip().upper()
+    sid = (request.args.get("sid") or "").strip()
+    if not class_code or not sid:
+        return "class_code and sid are required", 400
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT class_code, sid, student_name, submitted, confidence, priority, created_at, placements
+            FROM student_sessions
+            WHERE class_code = :code AND sid = :sid
+            ORDER BY student_name ASC
+        """), {"code": class_code, "sid": sid}).fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "student_sessions"
+
+    headers = ["class_code", "sid", "student_name", "submitted", "confidence", "priority", "created_at", "placements_json"]
+    ws.append(headers)
+
+    for r in rows:
+        placements_json = ""
+        try:
+            placements_json = json.dumps(
+                r.placements if isinstance(r.placements, dict) else (r.placements or {}),
+                ensure_ascii=False
+            )
+        except Exception:
+            placements_json = ""
+
+        ws.append([
+            r.class_code,
+            r.sid,
+            r.student_name,
+            bool(r.submitted),
+            r.confidence,
+            r.priority,
+            r.created_at.isoformat() if r.created_at else None,
+            placements_json,
+        ])
+
+    _autosize_columns(ws)
+    return _xlsx_response(wb, f"student_sessions_{class_code}_sid{sid}.xlsx")
+
+
+@app.route("/research/export/teacher_runs.xlsx")
+def export_teacher_runs_xlsx():
+    guard = require_admin()
+    if guard is not None:
+        return guard
+
+    if not engine:
+        return "DB not configured", 400
+
+    class_code = (request.args.get("class_code") or "").strip().upper()
+    session_id = (request.args.get("session_id") or "").strip()
+    if not class_code or not session_id:
+        return "class_code and session_id are required", 400
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT id, class_code, session_id, teacher_username, condition, submitted,
+                   started_at, ended_at, duration_ms, confidence_score, created_at, placements
+            FROM teacher_placement_runs
+            WHERE class_code = :code AND session_id = :sid
+            ORDER BY created_at DESC
+        """), {"code": class_code, "sid": session_id}).fetchall()
+
+        run_ids = [int(r.id) for r in rows]
+        decisions = []
+        if run_ids:
+            decisions = conn.execute(text("""
+                SELECT id, run_id, target_student_name, priority_rank, decision_confidence, reason_tags, created_at
+                FROM teacher_decisions
+                WHERE run_id = ANY(:run_ids)
+                ORDER BY run_id DESC, priority_rank ASC
+            """), {"run_ids": run_ids}).fetchall()
+
+    wb = Workbook()
+
+    ws1 = wb.active
+    ws1.title = "teacher_runs"
+    ws1.append([
+        "run_id", "class_code", "session_id", "teacher_username", "condition", "submitted",
+        "started_at", "ended_at", "duration_ms", "confidence_score", "created_at", "placements_json"
+    ])
+
+    for r in rows:
+        placements_json = ""
+        try:
+            placements_json = json.dumps(
+                r.placements if isinstance(r.placements, dict) else (r.placements or {}),
+                ensure_ascii=False
+            )
+        except Exception:
+            placements_json = ""
+
+        ws1.append([
+            int(r.id),
+            r.class_code,
+            r.session_id,
+            r.teacher_username,
+            r.condition,
+            bool(r.submitted),
+            r.started_at.isoformat() if r.started_at else None,
+            r.ended_at.isoformat() if r.ended_at else None,
+            r.duration_ms,
+            r.confidence_score,
+            r.created_at.isoformat() if r.created_at else None,
+            placements_json,
+        ])
+
+    _autosize_columns(ws1)
+
+    ws2 = wb.create_sheet("teacher_decisions")
+    ws2.append(["decision_id", "run_id", "target_student_name", "priority_rank", "decision_confidence", "reason_tags_json", "created_at"])
+
+    for d in decisions:
+        reason_json = ""
+        try:
+            reason_json = json.dumps(d.reason_tags if isinstance(d.reason_tags, (dict, list)) else (d.reason_tags or []), ensure_ascii=False)
+        except Exception:
+            reason_json = ""
+
+        ws2.append([
+            int(d.id),
+            int(d.run_id),
+            d.target_student_name,
+            d.priority_rank,
+            d.decision_confidence,
+            reason_json,
+            d.created_at.isoformat() if d.created_at else None,
+        ])
+
+    _autosize_columns(ws2)
+    return _xlsx_response(wb, f"teacher_runs_{class_code}_session{session_id}.xlsx")
 
 
 # -------------------------
