@@ -38,7 +38,19 @@
 
     .nav-title { text-align: center; font-weight: bold; }
     .nav-title a { text-decoration: none; color: #333; font-size: 16px; }
+    
+    .nav-title { text-align: center; font-weight: bold; }
+    .nav-title a { text-decoration: none; color: #333; font-size: 16px; display: inline-block; line-height: 1.1; }
 
+.nav-subtitle{
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+
+    
     .muted { color: #666; font-weight: 600; margin-left: 8px; }
     .content { margin-top: 100px; padding: 10px; }
 
@@ -276,9 +288,13 @@
       {% endif %}
     </div>
 
-    <div class="nav-title">
-      <a href="/">내 마음 받아쓰기</a>
-    </div>
+<div class="nav-title">
+  <a href="/">
+    우리반 관계지도
+    <div class="nav-subtitle">Spatial Peer Mapping</div>
+  </a>
+</div>
+
 
     <div class="nav-side">
       {% if session.teacher %}
