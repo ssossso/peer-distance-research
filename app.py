@@ -933,12 +933,56 @@ if DEBUG_MODE:
             return jsonify({"version": int(row.version), "updated_at": row.updated_at.isoformat() if row.updated_at else None})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+          if DEBUG_MODE:
+    @app.route("/debug/versions")
+    def debug_versions():
+        import sys
+
+        out = {
+            "python_version": sys.version,
+            "python_version_info": list(sys.version_info),
+            "openpyxl_available": bool(OPENPYXL_AVAILABLE and (Workbook is not None)),
+        }
+
+        # openpyxl 버전도 확인 (설치돼 있을 때만)
+        if OPENPYXL_AVAILABLE:
+            try:
+                import openpyxl  # type: ignore
+                out["openpyxl_version"] = getattr(openpyxl, "__version__", None)
+            except Exception as e:
+                out["openpyxl_version_error"] = str(e)
+
+        return jsonify(out)
+
+
 
 
 # ---------- 헬스 체크 (콜드 스타트 방지용) ----------
 @app.route("/health")
 def health():
-    return "ok", 200
+    # 기본 응답은 가볍게 유지하되, 내부적으로는 핵심 의존성 상태를 함께 확인 가능
+    status = {
+        "ok": True,
+        "openpyxl_available": bool(OPENPYXL_AVAILABLE and (Workbook is not None)),
+    }
+
+    # DB는 설정돼 있으면 가볍게 ping (실패해도 앱 전체는 살리고 상태만 표시)
+    if engine:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            status["db_ok"] = True
+        except Exception as e:
+            status["db_ok"] = False
+            status["db_error"] = str(e)
+    else:
+        status["db_ok"] = False
+        status["db_error"] = "DATABASE_URL not set"
+
+    # openpyxl이 “import 됐고 Workbook이 살아있는지”가 핵심
+    http_code = 200 if status["openpyxl_available"] else 500
+    return jsonify(status), http_code
+
 
 
 
