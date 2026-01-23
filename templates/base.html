@@ -203,7 +203,137 @@
       box-shadow: none !important;
       transform: none !important;
     }
+    
+    /* -------------------------------------------------
+       Password toggle (shared)
+       - 로그인/회원가입 공통
+       - 아이콘 위치 흔들림 방지 포함
+    ------------------------------------------------- */
+
+    .pw-wrap{
+      position: relative;
+      width: 100%;
+    }
+
+    .pw-input-in{
+      width: 100%;
+      padding-right: 44px;
+      box-sizing: border-box;
+    }
+
+    .pw-in-toggle{
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: none;
+      background: transparent;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      cursor: pointer;
+      color: #6b7280;
+      transition: color 140ms ease;
+
+      /* 흔들림/점프 방지 */
+      line-height: 0;
+      font-size: 0;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+
+    .pw-in-toggle:hover{
+      color: #111827;
+    }
+
+    .pw-in-toggle:focus-visible{
+      outline: 2px solid rgba(59, 130, 246, 0.35);
+      outline-offset: 2px;
+      border-radius: 8px;
+      color: #111827;
+    }
+
+    .eye-icon{
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      opacity: 0;
+      transform: scale(0.92);
+      transition: opacity 160ms ease, transform 160ms ease;
+
+      pointer-events: none;
+    }
+
+    .eye-icon.is-active{
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .eye-icon svg{
+      display: block;
+    }
+
+    .pw-in-toggle, .pw-in-toggle *{
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .pw-in-toggle{
+        transition: none;
+      }
+      .eye-icon{
+        transition: none;
+      }
+    }
+
   </style>
+    <script>
+    (function(){
+      function bindPwToggle(inputId, btnId, eyeOnId, eyeOffId){
+        const input = document.getElementById(inputId);
+        const btn = document.getElementById(btnId);
+        const eyeOn = document.getElementById(eyeOnId);
+        const eyeOff = document.getElementById(eyeOffId);
+        if (!input || !btn || !eyeOn || !eyeOff) return;
+
+        function setState(show){
+          input.type = show ? 'text' : 'password';
+          btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+
+          if (show){
+            eyeOn.classList.remove('is-active');
+            eyeOff.classList.add('is-active');
+          } else {
+            eyeOff.classList.remove('is-active');
+            eyeOn.classList.add('is-active');
+          }
+        }
+
+        // 초기: 숨김
+        setState(false);
+
+        btn.addEventListener('click', () => {
+          const willShow = (input.type === 'password');
+          setState(willShow);
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        // 로그인/회원가입 페이지에 있는 요소만 자동으로 바인딩됨
+        bindPwToggle('pwInput',  'pwToggleBtn',  'eyeOn',  'eyeOff');
+        bindPwToggle('pw2Input', 'pw2ToggleBtn', 'eye2On', 'eye2Off');
+      });
+    })();
+  </script> 
 </head>
 
 <body>
