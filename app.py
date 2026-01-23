@@ -784,6 +784,13 @@ if DEBUG_MODE:
             return jsonify({"error": str(e)}), 500
 
 
+# ---------- 헬스 체크 (콜드 스타트 방지용) ----------
+@app.route("/health")
+def health():
+    return "ok", 200
+
+
+
 # -------------------------
 # Home
 # -------------------------
