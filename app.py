@@ -30,8 +30,13 @@ from sqlalchemy.orm import sessionmaker
 from urllib.parse import quote, unquote
 from werkzeug.security import check_password_hash, generate_password_hash
 try:
-    from openpyxl import Workbook
-    from openpyxl.utils import get_column_letter
+    from openpyxl import Workbook  # type: ignore
+    from openpyxl.utils import get_column_letter  # type: ignore
+    OPENPYXL_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover
+    Workbook = None  # type: ignore
+    get_column_letter = None  # type: ignore
+    OPENPYXL_AVAILABLE = False
     OPENPYXL_AVAILABLE = True
 except ModuleNotFoundError:
     Workbook = None  # type: ignore
