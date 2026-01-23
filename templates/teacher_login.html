@@ -3,15 +3,56 @@
 <div class="card">
   <h2>교사 로그인</h2>
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
   <form method="post">
-    아이디<br><input name="username" autocomplete="username"><br><br>
-    비밀번호<br><input type="password" name="password" autocomplete="current-password"><br><br>
+    아이디<br>
+    <input name="username" autocomplete="username"><br><br>
+
+    비밀번호<br>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input id="pwInput"
+             type="password"
+             name="password"
+             autocomplete="current-password"
+             style="flex:1;">
+
+      <button id="pwToggleBtn"
+              type="button"
+              aria-label="비밀번호 보기/숨기기"
+              style="
+                width:44px;
+                height:40px;
+                padding:0;
+                border-radius:10px;
+                font-size:18px;
+              ">
+        👁
+      </button>
+    </div>
+    <br>
+<br>
+
     <button>로그인</button>
   </form>
+
   <hr style="margin:18px 0;">
   <div>
     아직 계정이 없으신가요?<br>
     <a href="/teacher/signup">교사 회원가입</a>
   </div>
 </div>
+
+<script>
+  (function(){
+    const input = document.getElementById('pwInput');
+    const btn = document.getElementById('pwToggleBtn');
+    if (!input || !btn) return;
+
+    btn.addEventListener('click', () => {
+      const isPw = input.getAttribute('type') === 'password';
+      input.setAttribute('type', isPw ? 'text' : 'password');
+      btn.textContent = isPw ? '🙈' : '👁';
+    });
+  })();
+</script>
 {% endblock %}
