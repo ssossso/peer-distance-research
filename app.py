@@ -921,19 +921,26 @@ def debug_db():
 
 
 if DEBUG_MODE:
+
     @app.route("/debug/schema_version")
     def debug_schema_version():
         if not engine:
             return jsonify({"error": "DATABASE_URL not set"}), 500
         try:
             with engine.connect() as conn:
-                row = conn.execute(text("SELECT version, updated_at FROM schema_migrations WHERE id = 1")).fetchone()
+                row = conn.execute(
+                    text("SELECT version, updated_at FROM schema_migrations WHERE id = 1")
+                ).fetchone()
             if not row:
                 return jsonify({"version": None, "updated_at": None})
-            return jsonify({"version": int(row.version), "updated_at": row.updated_at.isoformat() if row.updated_at else None})
+            return jsonify({
+                "version": int(row.version),
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            })
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-          if DEBUG_MODE:
+
+
     @app.route("/debug/versions")
     def debug_versions():
         import sys
@@ -953,7 +960,6 @@ if DEBUG_MODE:
                 out["openpyxl_version_error"] = str(e)
 
         return jsonify(out)
-
 
 
 
