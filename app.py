@@ -314,11 +314,22 @@ def require_admin():
 # -------------------------
 
 def _xlsx_response(wb, filename: str):
-    if not OPENPYXL_AVAILABLE:
+    """
+    Safe XLSX response helper.
+    - openpyxl 미설치/오작동 시: 라우트가 500으로 깔끔하게 실패하고, 앱 전체 부팅을 깨지 않도록 방어
+    """
+    if not OPENPYXL_AVAILABLE or Workbook is None:
         return "openpyxl not installed on server", 500
-    
+
+    if wb is None:
+        return "workbook is None", 500
+
     bio = io.BytesIO()
-    wb.save(bio)
+    try:
+        wb.save(bio)
+    except Exception as e:
+        return f"failed to generate xlsx: {e}", 500
+
     bio.seek(0)
     return send_file(
         bio,
@@ -326,6 +337,7 @@ def _xlsx_response(wb, filename: str):
         as_attachment=True,
         download_name=filename,
     )
+
 
 def _autosize_columns(ws):
     # 단순 자동 폭 (완벽하진 않지만 연구용엔 충분)
@@ -1029,7 +1041,8 @@ def export_student_sessions_xlsx():
     if guard is not None:
         return guard
 
-    if not OPENPYXL_AVAILABLE:
+    # XLSX 기능은 openpyxl 의존: 미설치면 라우트만 500으로 종료
+    if not OPENPYXL_AVAILABLE or Workbook is None:
         return "openpyxl not installed on server", 500
 
     if not engine:
@@ -1040,44 +1053,52 @@ def export_student_sessions_xlsx():
     if not class_code or not sid:
         return "class_code and sid are required", 400
 
-    with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT class_code, sid, student_name, submitted, confidence, priority, created_at, placements
-            FROM student_sessions
-            WHERE class_code = :code AND sid = :sid
-            ORDER BY student_name ASC
-        """), {"code": class_code, "sid": sid}).fetchall()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT class_code, sid, student_name, submitted, confidence, priority, created_at, placements
+                FROM student_sessions
+                WHERE class_code = :code AND sid = :sid
+                ORDER BY student_name ASC
+            """), {"code": class_code, "sid": sid}).fetchall()
+    except Exception as e:
+        return f"DB query failed: {e}", 500
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "student_sessions"
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "student_sessions"
 
-    headers = ["class_code", "sid", "student_name", "submitted", "confidence", "priority", "created_at", "placements_json"]
-    ws.append(headers)
+        headers = ["class_code", "sid", "student_name", "submitted", "confidence", "priority", "created_at", "placements_json"]
+        ws.append(headers)
 
-    for r in rows:
-        placements_json = ""
-        try:
-            placements_json = json.dumps(
-                r.placements if isinstance(r.placements, dict) else (r.placements or {}),
-                ensure_ascii=False
-            )
-        except Exception:
+        for r in rows:
             placements_json = ""
+            try:
+                placements_json = json.dumps(
+                    r.placements if isinstance(r.placements, dict) else (r.placements or {}),
+                    ensure_ascii=False
+                )
+            except Exception:
+                placements_json = ""
 
-        ws.append([
-            r.class_code,
-            r.sid,
-            r.student_name,
-            bool(r.submitted),
-            r.confidence,
-            r.priority,
-            r.created_at.isoformat() if r.created_at else None,
-            placements_json,
-        ])
+            ws.append([
+                r.class_code,
+                r.sid,
+                r.student_name,
+                bool(r.submitted),
+                r.confidence,
+                r.priority,
+                r.created_at.isoformat() if r.created_at else None,
+                placements_json,
+            ])
 
-    _autosize_columns(ws)
-    return _xlsx_response(wb, f"student_sessions_{class_code}_sid{sid}.xlsx")
+        _autosize_columns(ws)
+        return _xlsx_response(wb, f"student_sessions_{class_code}_sid{sid}.xlsx")
+
+    except Exception as e:
+        return f"xlsx generation failed: {e}", 500
+
 
 
 @app.route("/research/export/teacher_runs.xlsx")
