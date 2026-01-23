@@ -315,7 +315,10 @@ def require_admin():
 # Research admin: XLSX helpers + overview fetch
 # -------------------------
 
-def _xlsx_response(wb: Workbook, filename: str):
+def _xlsx_response(wb, filename: str):
+    if not OPENPYXL_AVAILABLE:
+        return "openpyxl not installed on server", 500
+    ...
     bio = io.BytesIO()
     wb.save(bio)
     bio.seek(0)
