@@ -82,9 +82,13 @@
 
     cursor: pointer;
     color: #6b7280; /* 기본: 회색 */
-
-    /* hover 시 "색상만" 자연스럽게 */
     transition: color 140ms ease;
+
+    /* 흔들림 방지: 버튼 내부 레이아웃/폰트 영향 제거 */
+    line-height: 0;
+    font-size: 0;
+    box-sizing: border-box;
+    flex-shrink: 0;
   }
 
   /* hover 시 아이콘 색: 회색 -> 검정 */
@@ -104,10 +108,6 @@
      - 두 아이콘을 같은 위치에 겹쳐두고
      - opacity/scale로 부드럽게 교체
   */
-  .pw-in-toggle{
-    position: absolute; /* 명시(위에서 이미 지정) */
-  }
-
   .eye-icon{
     position: absolute;
     inset: 0;
