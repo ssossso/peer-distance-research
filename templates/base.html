@@ -7,7 +7,6 @@
 
   <style>
     html {
-      /* 스크롤바 공간을 미리 확보해서 레이아웃 흔들림 방지 */
       scrollbar-gutter: stable;
     }
 
@@ -15,8 +14,6 @@
       font-family: sans-serif;
       margin: 0;
       background: #f4f6fa;
-
-      /* 스크롤바가 생기거나 없어질 때 화면 폭이 흔들리는 현상 방지 */
       overflow-y: scroll;
     }
 
@@ -69,8 +66,6 @@
     }
     .main-btn:hover { background: #3955c6; }
 
-    .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 5px; }
-
     textarea {
       width: 100%;
       padding: 10px;
@@ -97,68 +92,18 @@
       cursor: pointer;
       font-size: 16px;
       font-weight: bold;
-
-      /* 데스크탑/브라우저 기본 버튼 렌더링 차이 제거 */
       appearance: none;
       -webkit-appearance: none;
     }
     button:hover { background: #3955c6; }
 
-    /* 버튼이 focus 먹을 때 “커져 보이는” 기본 효과 제거 */
     button:focus,
-    button:focus-visible {
+    button:focus-visible,
+    button:active {
       outline: none !important;
       box-shadow: none !important;
       transform: none !important;
     }
-
-    ul { padding-left: 0; list-style: none; }
-    li { margin: 8px 0; }
-
-    .status { font-weight: bold; color: #4a6cf7; }
-
-    .student-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .student-name { font-weight: 600; }
-
-    .student-name .no {
-      display: inline-block;
-      min-width: 26px;
-      text-align: right;
-      margin-right: 6px;
-      color: #6b7280;
-      font-weight: 700;
-    }
-
-    .student-actions { display: flex; align-items: center; gap: 8px; }
-
-    .goto-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border: 1px solid #4a6cf7;
-      border-radius: 8px;
-      text-decoration: none;
-      color: #4a6cf7;
-      font-weight: 800;
-      line-height: 1;
-    }
-    .goto-btn:hover { background: #eef2ff; }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 10px;
-      border: 1px solid #d1d5db;
-      border-radius: 999px;
-      background: #ffffff;
-      font-weight: 800;
-      font-size: 13px;
-      color: #111827;
-    }
-    .pill:hover { background: #f3f4f6; }
 
     .error { color: #c0392b; font-weight: 700; margin-bottom: 10px; }
 
@@ -170,44 +115,36 @@
     }
 
     /* -------------------------------------------------
-       아래는 "눌렀을 때 커지는 것처럼 보이는 효과" 방지용
-       base에서 전역으로 막습니다.
+       전역 클릭/탭 안정화 (button 제외)
     ------------------------------------------------- */
 
-    /* 모바일 탭 하이라이트 제거 + 확대/변형 방지 */
-    button, a, .main-btn, .goto-btn, .pill {
+    a, .main-btn, .goto-btn, .pill {
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
     }
 
-    /* 어떤 CSS/브라우저 기본효과가 와도 active/focus에서 크기변형 못 하게 */
-    button:active, button:focus,
     a:active, a:focus,
     .main-btn:active, .main-btn:focus,
     .goto-btn:active, .goto-btn:focus,
     .pill:active, .pill:focus {
       transform: none !important;
-      transition: none !important;
       outline: none;
     }
 
-    /* 혹시 공통 CSS 어딘가에 transition이 걸려있어도 여기서 차단 */
-    button, a, .main-btn, .goto-btn, .pill {
+    /* transition 차단 대상에서 button 제거 */
+    a, .main-btn, .goto-btn, .pill {
       transition: none !important;
     }
 
-    /* 클릭/드래그 중 선택/강조로 “커져 보이는” 현상 방지(데스크탑 포함) */
     a:focus,
     a:focus-visible {
       outline: none !important;
       box-shadow: none !important;
       transform: none !important;
     }
-    
+
     /* -------------------------------------------------
        Password toggle (shared)
-       - 로그인/회원가입 공통
-       - 아이콘 위치 흔들림 방지 포함
     ------------------------------------------------- */
 
     .pw-wrap{
@@ -241,7 +178,6 @@
       color: #6b7280;
       transition: color 140ms ease;
 
-      /* 흔들림/점프 방지 */
       line-height: 0;
       font-size: 0;
       box-sizing: border-box;
@@ -265,11 +201,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-
       opacity: 0;
       transform: scale(0.92);
       transition: opacity 160ms ease, transform 160ms ease;
-
       pointer-events: none;
     }
 
@@ -287,16 +221,14 @@
     }
 
     @media (prefers-reduced-motion: reduce){
-      .pw-in-toggle{
-        transition: none;
-      }
+      .pw-in-toggle,
       .eye-icon{
         transition: none;
       }
     }
-
   </style>
-    <script>
+
+  <script>
     (function(){
       function bindPwToggle(inputId, btnId, eyeOnId, eyeOffId){
         const input = document.getElementById(inputId);
@@ -318,22 +250,19 @@
           }
         }
 
-        // 초기: 숨김
         setState(false);
 
         btn.addEventListener('click', () => {
-          const willShow = (input.type === 'password');
-          setState(willShow);
+          setState(input.type === 'password');
         });
       }
 
       document.addEventListener('DOMContentLoaded', () => {
-        // 로그인/회원가입 페이지에 있는 요소만 자동으로 바인딩됨
         bindPwToggle('pwInput',  'pwToggleBtn',  'eyeOn',  'eyeOff');
         bindPwToggle('pw2Input', 'pw2ToggleBtn', 'eye2On', 'eye2Off');
       });
     })();
-  </script> 
+  </script>
 </head>
 
 <body>
@@ -342,7 +271,6 @@
       {% if session.teacher %}
         <a href="/teacher/dashboard">내 학급</a>
       {% endif %}
-
       {% if current_class %}
         <span class="muted">현재 선택: {{ current_class.name }}, 코드: {{ current_class.code }}</span>
       {% endif %}
