@@ -110,7 +110,14 @@
 
     /* hover 시 "색상만" 자연스럽게 */
     transition: color 140ms ease;
+
+    /* 흔들림 방지: 버튼 내부 텍스트/라인박스 영향 제거 */
+    line-height: 0;
+    font-size: 0;
+    box-sizing: border-box;
+    flex-shrink: 0;
   }
+
 
   /* hover 시 아이콘 색: 회색 -> 검정 */
   .pw-in-toggle:hover{
