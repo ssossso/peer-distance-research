@@ -30,15 +30,18 @@ from sqlalchemy.orm import sessionmaker
 from urllib.parse import quote, unquote
 from werkzeug.security import check_password_hash, generate_password_hash
 
-# --- optional dependency: openpyxl (XLSX export only) ---
 try:
     from openpyxl import Workbook
     from openpyxl.utils import get_column_letter
     OPENPYXL_AVAILABLE = True
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:  # openpyxl 미설치 환경
     Workbook = None  # type: ignore
     get_column_letter = None  # type: ignore
     OPENPYXL_AVAILABLE = False
+
+    def get_column_letter(_n: int) -> str:  # pragma: no cover
+        # openpyxl이 없을 때는 _autosize_columns가 호출되지 않도록 가드함
+        return "A"
 
 
 
@@ -1027,7 +1030,7 @@ def export_student_sessions_xlsx():
         return guard
 
     if not OPENPYXL_AVAILABLE:
-        return "XLSX export requires openpyxl", 501
+        return "openpyxl not installed on server", 500
 
     if not engine:
         return "DB not configured", 400
