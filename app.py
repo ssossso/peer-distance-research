@@ -1469,6 +1469,101 @@ def class_detail(code):
 
     return render_template("class_detail.html", cls=cls, code=code, rows=rows, sid=sid, session_links=session_links)
 
+@app.route("/teacher/class/<code>/v2")
+def class_detail_v2(code):
+    """Parallel rebuild: new class detail UI (v2).
+    Keeps existing v1 intact for safe rollout.
+
+    Notes:
+    - v2 currently supports research plan default of 4 rounds (sid 1-4).
+    - v2 uses `open=1` query param to expand the selected round panel.
+    """
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    sid = (request.args.get("sid") or session.get("selected_session") or "1").strip()
+    if sid not in ["1", "2", "3", "4"]:
+        sid = "1"
+    session["selected_session"] = sid
+
+    open_panel = (request.args.get("open") or "").strip() == "1"
+
+    if engine:
+        cls = db_get_class_for_teacher(code, session["teacher"])
+        if not cls or cls.get("_forbidden"):
+            return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+        cls = ensure_class_schema(cls)
+        students = db_get_students_in_class(code)
+        cls["students"] = students
+
+        submitted_map = db_get_submitted_map(code, sid)
+        session["selected_class"] = code
+
+        rows: List[Dict[str, Any]] = []
+        for i, item in enumerate(students, start=1):
+            no = str(item.get("no", "") or i)
+            name = (item.get("name") or "").strip()
+            if not name:
+                continue
+            submitted = bool(submitted_map.get(name, False))
+            status = "완료" if submitted else "미완료"
+            rows.append({"no": no, "name": name, "status": status, "url_name": quote(name)})
+
+        session_links: List[Dict[str, str]] = []
+        for _sid, meta in sorted(cls.get("sessions", {}).items(), key=lambda x: int(x[0])):
+            # v2 uses 1-4 by default; still render whatever exists in schema, but UI buttons will show 1-4.
+            session_links.append({"sid": _sid, "label": meta.get("label", f"{_sid}차"), "url": f"/s/{code}/{_sid}"})
+
+        return render_template(
+            "class_detail_v2.html",
+            cls=cls,
+            code=code,
+            rows=rows,
+            sid=sid,
+            session_links=session_links,
+            open_panel=open_panel,
+        )
+
+    # JSON fallback
+    d = load_data()
+    cls = ensure_class_schema(d.get("classes", {}).get(code))
+    if not cls or cls.get("teacher") != session["teacher"]:
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+    session["selected_class"] = code
+
+    rows = []
+    for i, item in enumerate(cls.get("students", []), start=1):
+        if isinstance(item, dict):
+            no = str(item.get("no", "") or i)
+            name = (item.get("name") or "").strip()
+        else:
+            no = str(i)
+            name = (item or "").strip()
+
+        if not name:
+            continue
+
+        submitted = bool(cls.get("students_data", {}).get(name, {}).get("sessions", {}).get(sid, {}).get("submitted", False))
+        status = "완료" if submitted else "미완료"
+        rows.append({"no": no, "name": name, "status": status, "url_name": quote(name)})
+
+    session_links = []
+    for _sid, meta in sorted(cls.get("sessions", {}).items(), key=lambda x: int(x[0])):
+        session_links.append({"sid": _sid, "label": meta.get("label", f"{_sid}차"), "url": f"/s/{code}/{_sid}"})
+
+    return render_template(
+        "class_detail_v2.html",
+        cls=cls,
+        code=code,
+        rows=rows,
+        sid=sid,
+        session_links=session_links,
+        open_panel=open_panel,
+    )
+
 
 @app.route("/teacher/class/<code>/result/<sid>/<url_name>")
 def teacher_view_student_result(code, sid, url_name):
