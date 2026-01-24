@@ -998,7 +998,12 @@ def health():
 
 @app.route("/")
 def home():
+    # 로그인 유지 중이면 "home -> dashboard" 흐름을 고정
+    if "teacher" in session:
+        return redirect("/teacher/dashboard")
+
     return render_template("home.html", site_title=SITE_TITLE)
+
 
 
 # -------------------------
@@ -1073,9 +1078,13 @@ def teacher_signup():
     return render_template("teacher_signup.html")
 
 
-
 @app.route("/teacher/login", methods=["GET", "POST"])
 def teacher_login():
+    # 이미 로그인 유지 중이면 login 화면을 거치지 않고 home으로 보냄
+    # (home이 다시 dashboard로 보냄)
+    if request.method == "GET" and "teacher" in session:
+        return redirect("/")
+
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         pw = request.form.get("password", "")
@@ -1093,12 +1102,17 @@ def teacher_login():
             if check_password_hash(pw_hash, pw):
                 session.clear()
                 session["teacher"] = username
-                return redirect("/teacher/dashboard")
+
+                # 바로 dashboard로 보내지 않고 home으로 보냄
+                # (주소 흐름: home -> dashboard)
+                return redirect("/")
+
             return render_template("teacher_login.html", error="로그인 실패: 비밀번호 불일치")
         except Exception as e:
             return render_template("teacher_login.html", error=f"로그인 처리 중 오류: {e} / resp={resp}")
 
     return render_template("teacher_login.html")
+
 
 
 @app.route("/teacher/logout")
@@ -1865,7 +1879,6 @@ def teacher_placement_write(run_id: int):
         placements=placements,
     )
 
-
 @app.route("/teacher/placement/<int:run_id>/complete", methods=["GET", "POST"])
 def teacher_placement_complete(run_id: int):
     if "teacher" not in session:
@@ -1874,6 +1887,9 @@ def teacher_placement_complete(run_id: int):
     run = db_get_teacher_run(run_id)
     if not run or run["teacher_username"] != session["teacher"]:
         return "접근 권한이 없습니다.", 403
+
+    # 완료 화면에서 자동완성 목록 제공용
+    students = db_get_students_in_class(run["class_code"]) if engine else []
 
     if request.method == "POST":
         duration_ms_raw = request.form.get("duration_ms") or "0"
@@ -1899,7 +1915,8 @@ def teacher_placement_complete(run_id: int):
 
         return redirect(f"/teacher/class/{run['class_code']}?sid={run['session_id']}")
 
-    return render_template("teacher_complete.html", run=run)
+    return render_template("teacher_complete.html", run=run, students=students)
+
 
 
 # -------------------------
