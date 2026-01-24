@@ -698,7 +698,6 @@ def db_list_submitted_student_sessions(class_code: str, sid: str) -> List[Dict[s
         out.append({"student_name": r.student_name, "placements": placements_obj})
     return out
 
-
 def db_upsert_student_session(class_code: str, student_name: str, sid: str, placements: Dict[str, Any], submitted: bool) -> None:
     if not engine:
         raise RuntimeError("DB engine not initialized")
@@ -716,7 +715,7 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
         if row:
             conn.execute(text("""
                 UPDATE student_sessions
-                SET placements = :placements::jsonb,
+                SET placements = CAST(:placements AS jsonb),
                     placements_json = :placements_json,
                     submitted = :submitted
                 WHERE id = :id
@@ -724,7 +723,7 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
         else:
             conn.execute(text("""
                 INSERT INTO student_sessions (class_code, sid, student_name, placements, placements_json, submitted)
-                VALUES (:code, :sid, :name, :placements::jsonb, :placements_json, :submitted)
+                VALUES (:code, :sid, :name, CAST(:placements AS jsonb), :placements_json, :submitted)
             """), {"code": class_code, "sid": sid, "name": student_name, "placements": placements_str, "placements_json": placements_str, "submitted": submitted})
 
 
@@ -736,7 +735,7 @@ def db_create_teacher_run(class_code: str, teacher_username: str, sid: str, cond
         row = conn.execute(text("""
             INSERT INTO teacher_placement_runs
             (class_code, teacher_username, session_id, condition, tool_run_id, placements, placements_json, submitted, started_at)
-            VALUES (:code, :t, :sid, :cond, :tool_run_id, :placements::jsonb, :placements_json, FALSE, NOW())
+            VALUES (:code, :t, :sid, :cond, :tool_run_id, CAST(:placements AS jsonb), :placements_json, FALSE, NOW())
             RETURNING id
         """), {
             "code": class_code,
@@ -747,7 +746,9 @@ def db_create_teacher_run(class_code: str, teacher_username: str, sid: str, cond
             "placements": json.dumps({}, ensure_ascii=False),
             "placements_json": json.dumps({}, ensure_ascii=False),
         }).fetchone()
+
     return int(row.id)
+
 
 
 def db_get_teacher_run(run_id: int) -> Optional[Dict[str, Any]]:
