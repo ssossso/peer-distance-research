@@ -4,24 +4,29 @@
   <h2 style="text-align:center;">{{ cls.name }}</h2>
   <p style="text-align:center;">학급 코드: <b>{{ code }}</b></p>
 
-  <!-- 교사 배치 시작 버튼 (추가) -->
+  <!-- 교사 배치 시작 버튼: 로그인한 교사에게만 노출 -->
+  {% if session.get("teacher") %}
   <div style="display:flex; justify-content:center; gap:10px; margin:10px 0 6px 0;">
     <a
       class="pill"
       href="/teacher/class/{{ code }}/placement/start?sid={{ sid }}"
       style="text-decoration:none; display:inline-block;"
       title="교사 관계 구조 배치 시작"
+      aria-label="교사 관계 구조 배치 시작"
     >
       교사 배치 시작
     </a>
   </div>
+  {% endif %}
 
   <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin:12px 0;">
     <div style="font-weight:800;">측정 회차</div>
     <form method="get" action="" style="display:flex; gap:8px; align-items:center;">
       <select name="sid" onchange="this.form.submit();" style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
         {% for _sid, meta in cls.sessions|dictsort(true) %}
-          <option value="{{ _sid }}" {% if _sid == sid %}selected{% endif %}>{{ meta.label if meta.label else (_sid ~ '차') }}</option>
+          <option value="{{ _sid }}" {% if (_sid|string) == (sid|string) %}selected{% endif %}>
+            {{ meta.label if meta.label else (_sid ~ '차') }}
+          </option>
         {% endfor %}
       </select>
     </form>
@@ -48,6 +53,7 @@
             src="{{ qr_src }}"
             alt="{{ s.label }} QR"
             style="width:120px; height:120px; border-radius:8px; border:1px solid #eef2f7; display:block; margin:0 auto;"
+            loading="lazy"
           />
 
           <!-- QR 아래 아이콘 (링크 위) -->
@@ -56,6 +62,7 @@
             <button
               type="button"
               title="크게 보기(새 창)"
+              aria-label="QR 크게 보기(새 창)"
               onclick="openQrNewWindowOnly('{{ qr_src }}')"
               style="width:26px; height:26px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; line-height:1;"
             >🔎</button>
@@ -64,6 +71,7 @@
             <button
               type="button"
               title="PNG 다운로드"
+              aria-label="QR PNG 다운로드"
               onclick="downloadQrPng('{{ qr_src }}', '{{ s.label|e }}')"
               style="width:26px; height:26px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; line-height:1;"
             >📂</button>
@@ -71,7 +79,9 @@
 
           <!-- n차 링크 -->
           <div style="margin-top:4px;">
-            <a class="pill" href="{{ s.url }}" style="text-decoration:none; display:inline-block;">{{ s.label }} 링크</a>
+            <a class="pill" href="{{ s.url }}" style="text-decoration:none; display:inline-block;">
+              {{ s.label }} 링크
+            </a>
           </div>
         </div>
       {% endfor %}
@@ -85,7 +95,7 @@
         <div class="student-item">
           <div class="student-name"><span class="no">{{ r.no }}</span> {{ r.name }}</div>
           <div class="student-actions">
-            <a class="goto-btn" href="/teacher/class/{{ code }}/result/{{ sid }}/{{ r.url_name }}" title="학생 결과 보기">↗</a>
+            <a class="goto-btn" href="/teacher/class/{{ code }}/result/{{ sid }}/{{ r.url_name }}" title="학생 결과 보기" aria-label="학생 결과 보기">↗</a>
             <span class="status">{{ r.status }}</span>
           </div>
         </div>
