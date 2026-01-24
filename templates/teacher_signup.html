@@ -66,7 +66,78 @@
 
     <br>
 
-    <button>회원가입</button>
-  </form>
+<!-- =========================================================
+     RESEARCH_ONLY_BEGIN
+     논문 작성용 추가 수집(추후 삭제 예정)
+========================================================= -->
+<hr style="margin:18px 0; border:none; border-top:1px solid #e5e7eb;">
+
+<div style="text-align:left; font-size:12px; font-weight:700; color:#6b7280; line-height:1.45; margin-bottom:14px;">
+  이건 소히가 논문에 써 먹으려고 수집하는 정보입니당><<br>
+  실제 논문에서는 다 익명화해서 사용할게욤<br>
+  조촐한 연구에 참여해줘서 고마워요 제가 맛있는 밥 살게욤🍚🍕🍟
 </div>
+
+<div style="text-align:left; margin-bottom:14px;">
+  <div style="font-weight:800; margin-bottom:8px;">나의 교직경력은?</div>
+  <label style="display:block; margin:6px 0;">
+    <input type="radio" name="teaching_years" value="1-5" required> 1–5년
+  </label>
+  <label style="display:block; margin:6px 0;">
+    <input type="radio" name="teaching_years" value="6-10"> 6–10년
+  </label>
+  <label style="display:block; margin:6px 0;">
+    <input type="radio" name="teaching_years" value="11-15"> 11–15년
+  </label>
+  <label style="display:block; margin:6px 0;">
+    <input type="radio" name="teaching_years" value="16+"> 16년 이상
+  </label>
+</div>
+
+<div style="text-align:left; margin-bottom:14px;">
+  <div style="font-weight:800; margin-bottom:8px;">현재 담당 학년은?</div>
+  <label style="display:block; margin:6px 0;">
+    <input type="radio" name="current_grade" value="4" required> 4학년
+  </label>
+  <label style="display:block; margin:6px 0;">
+    <input type="radio" name="current_grade" value="5"> 5학년
+  </label>
+  <label style="display:block; margin:6px 0;">
+    <input type="radio" name="current_grade" value="6"> 6학년
+  </label>
+</div>
+
+<div style="text-align:left; margin-bottom:14px;">
+  <div style="font-weight:800; margin-bottom:6px;">
+    이름
+    <span style="font-size:12px; font-weight:700; color:#6b7280;">
+      실명, 소히가 나중에 인터뷰할 때 데이터-인터뷰 매칭 용도로만 사용><<br>
+      부담되면 소히가 알 만한 별명도 괜차나!
+    </span>
+  </div>
+  <input name="research_name" autocomplete="name" placeholder="예: 차은우 / 별명" />
+</div>
+
+<div style="text-align:left; margin-bottom:14px;">
+  <div style="font-weight:800; margin-bottom:6px;">
+    학교
+    <span style="font-size:12px; font-weight:700; color:#6b7280;">
+      학교 규모 등 파악 용도
+    </span>
+  </div>
+  <input name="research_school" placeholder="예: OO초 / OO시 OO구" />
+</div>
+
+<div style="text-align:left; font-size:12px; font-weight:700; color:#6b7280; margin-bottom:8px;">
+  감사합니당💙
+</div>
+
+<!-- =========================================================
+     RESEARCH_ONLY_END
+========================================================= -->
+
+<button>회원가입</button>
+</form>
+</div>
+
 {% endblock %}
