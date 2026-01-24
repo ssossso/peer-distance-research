@@ -1017,10 +1017,47 @@ def teacher_signup():
         if pw != pw2:
             return render_template("teacher_signup.html", error="비밀번호가 서로 다릅니다.")
 
+        # =========================================================
+        # RESEARCH_ONLY_BEGIN
+        # 논문 작성용 추가 수집(추후 삭제 예정)
+        # =========================================================
+        teaching_years = request.form.get("teaching_years", "").strip()
+        current_grade = request.form.get("current_grade", "").strip()
+        research_name = request.form.get("research_name", "").strip()
+        research_school = request.form.get("research_school", "").strip()
+
+        if not teaching_years:
+            return render_template("teacher_signup.html", error="교직경력을 선택해 주세요.")
+        if not current_grade:
+            return render_template("teacher_signup.html", error="담당 학년을 선택해 주세요.")
+        if not research_name:
+            return render_template("teacher_signup.html", error="이름을 입력해 주세요.")
+        if not research_school:
+            return render_template("teacher_signup.html", error="학교를 입력해 주세요.")
+        # =========================================================
+        # RESEARCH_ONLY_END
+        # =========================================================
+
         pw_hash = generate_password_hash(pw)
 
         try:
-            resp = post_to_sheet({"action": "teacher_signup", "username": username, "pw_hash": pw_hash})
+            resp = post_to_sheet({
+                "action": "teacher_signup",
+                "username": username,
+                "pw_hash": pw_hash,
+
+                # =========================================================
+                # RESEARCH_ONLY_BEGIN
+                # 논문 작성용 추가 수집(추후 삭제 예정)
+                # =========================================================
+                "teaching_years": teaching_years,      # "1-5" / "6-10" / "11-15" / "16+"
+                "current_grade": current_grade,        # "4" / "5" / "6"
+                "research_name": research_name,        # 필수
+                "research_school": research_school,    # 필수
+                # =========================================================
+                # RESEARCH_ONLY_END
+                # =========================================================
+            })
         except Exception as e:
             return render_template("teacher_signup.html", error=f"서버 통신 오류: {e}")
 
@@ -1034,6 +1071,7 @@ def teacher_signup():
         return render_template("teacher_signup.html", error=f"회원가입 실패: {resp}")
 
     return render_template("teacher_signup.html")
+
 
 
 @app.route("/teacher/login", methods=["GET", "POST"])
