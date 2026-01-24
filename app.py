@@ -998,8 +998,8 @@ def health():
 
 @app.route("/")
 def home():
-    # 로그인 유지 중이면 "home -> dashboard" 흐름을 고정
-    if "teacher" in session:
+    # 로그인 유지 중이면 home -> dashboard 흐름으로 고정
+    if session.get("teacher"):
         return redirect("/teacher/dashboard")
 
     return render_template("home.html", site_title=SITE_TITLE)
@@ -1080,9 +1080,9 @@ def teacher_signup():
 
 @app.route("/teacher/login", methods=["GET", "POST"])
 def teacher_login():
-    # 이미 로그인 유지 중이면 login 화면을 거치지 않고 home으로 보냄
-    # (home이 다시 dashboard로 보냄)
-    if request.method == "GET" and "teacher" in session:
+    # 로그인 유지 중이면 login 화면을 거치지 않고 home으로
+    # (home이 다시 dashboard로 보내므로 경로가 home -> dashboard로 고정됨)
+    if request.method == "GET" and session.get("teacher"):
         return redirect("/")
 
     if request.method == "POST":
@@ -1112,6 +1112,7 @@ def teacher_login():
             return render_template("teacher_login.html", error=f"로그인 처리 중 오류: {e} / resp={resp}")
 
     return render_template("teacher_login.html")
+
 
 
 
