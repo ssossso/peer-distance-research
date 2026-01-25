@@ -1436,7 +1436,7 @@ def teacher_signup():
 
 @app.route("/teacher/login", methods=["GET", "POST"])
 def teacher_login():
-    # 로그인 유지 중이면 login 화면을 거치지 않고 home으로
+    # 로그인 유지 중이면 login 화면을 거치지 않고 home으로 가기
     # (home이 다시 dashboard로 보내므로 경로가 home -> dashboard로 고정됨)
     if request.method == "GET" and session.get("teacher"):
         return redirect("/")
