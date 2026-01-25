@@ -26,6 +26,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session
 from io import BytesIO
+from reportlab.pdfgen import canvas as pdf_canvas
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
