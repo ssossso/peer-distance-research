@@ -21,7 +21,9 @@
     user-select:none;
   }
   .pill:hover{ border-color:#9ca3af; }
-
+  /* 다운로드 pill 내부 svg 고정(선택) */
+  .dl-pill svg { flex: 0 0 auto; }
+  
   .round-row{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin:10px 0 4px 0; }
 
   /* v2: round selector as rounded squares */
@@ -142,6 +144,7 @@
   button.icon-btn{ padding:0; border-radius:10px; }
   button.action-btn{ border-radius:12px; padding:10px 14px; }
 
+  .dl-pill svg { flex: 0 0 auto; }
   .dl-pill{
     display:inline-flex;
     align-items:center;
