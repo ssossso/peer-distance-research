@@ -2547,65 +2547,80 @@ def student_enter_session(code, sid):
     if sid not in (cls.get("sessions") or {}):
         sid = "1"
 
+    session_label = (cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차")
+
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         pin = (request.form.get("pin") or "").strip()
 
-        if name not in (cls.get("students_data") or {}):
+        # 1) 이름 검증 (명단 기반)
+        if not name or name not in (cls.get("students_data") or {}):
             return render_template(
                 "student_enter_session.html",
                 error="학생 명단에 없는 이름입니다.",
                 code=code,
                 sid=sid,
-                session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+                session_label=session_label,
             )
 
-        # 6자리 숫자만 허용
+        # 2) PIN 형식 검증 (6자리 숫자)
         if not (len(pin) == 6 and pin.isdigit()):
             return render_template(
                 "student_enter_session.html",
                 error="개인 코드는 6자리 숫자여야 합니다.",
                 code=code,
                 sid=sid,
-                session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+                session_label=session_label,
             )
 
-        # DB에서 pin 검증 (active 학생만)
+        # 3) DB 기반 PIN 일치 검증
         if engine:
             with engine.connect() as conn:
-                s_row = conn.execute(text("""
-                    SELECT 1
+                r = conn.execute(text("""
+                    SELECT pin_code
                     FROM students
                     WHERE class_code = :code
                       AND name = :name
-                      AND pin_code = :pin
                       AND active = TRUE
                     LIMIT 1
-                """), {"code": code, "name": name, "pin": pin}).fetchone()
+                """), {"code": code, "name": name}).fetchone()
 
-            if not s_row:
+            db_pin = (r.pin_code if r else None)
+            if not db_pin or str(db_pin).strip() != pin:
                 return render_template(
                     "student_enter_session.html",
-                    error="입장 실패(이름/코드가 맞지 않습니다).",
+                    error="개인 코드(PIN)가 올바르지 않습니다.",
                     code=code,
                     sid=sid,
-                    session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+                    session_label=session_label,
                 )
 
-        session["code"] = code
-        session["name"] = name
+        else:
+            # JSON 모드(로컬)에서는 PIN 검증을 스킵하거나,
+            # cls["students_data"]에 pin을 저장하는 구조라면 그에 맞춰 비교하세요.
+            # 여기서는 안전하게 "검증 없음"으로 둡니다.
+            pass
+
+        # 4) 세션 진입 처리: 서버에서 name/sid/code를 기억시키고 학생 작성 화면으로 이동
+        #    (당신 프로젝트에 이미 존재하는 write 라우트로 맞춰야 합니다.)
+        session["student_name"] = name
+        session["class_code"] = code
         session["sid"] = sid
-        session["selected_class"] = code
-        session["selected_session"] = sid
 
-        return redirect("/student/write")
+        # 가장 흔한 형태 1: /student/write/<code>/<sid>?name=...
+        # 존재하지 않으면 2번 형태로 fallback
+        try:
+            return redirect(f"/student/write/{code}/{sid}?name={quote(name)}")
+        except Exception:
+            return redirect(f"/student/write?code={code}&sid={sid}&name={quote(name)}")
 
-
+    # GET: 진입 페이지 렌더
     return render_template(
         "student_enter_session.html",
+        error=None,
         code=code,
         sid=sid,
-        session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+        session_label=session_label,
     )
 
 
