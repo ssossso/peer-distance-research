@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:980px; text-align:left;">
+  <h2 style="margin:0 0 6px 0; text-align:center;">{{ cls.name }}</h2>
+  <p style="margin:0 0 14px 0; text-align:center;">학급 코드: <b>{{ code }}</b> / {{ sid }}회차 결과</p>
+
+  <div class="card" style="background:#f8fafc;">
+    <div style="font-weight:950; margin-bottom:8px;">회차 요약</div>
+    <ul style="margin:0; padding-left:18px;">
+      <li>학생 참여: <b>{{ done }}</b> / {{ total }}</li>
+      <li>교사 관계 인식 배치: {% if teacher_has %}<b>완료</b>{% else %}<b>미완료</b>{% endif %}</li>
+      <li>참여 제외 처리: {% if state.exclusions_resolved %}<b>완료</b>{% else %}<b>미완료</b>{% endif %}</li>
+      <li>교사 설문: {% if state.survey_submitted %}<b>제출</b>{% else %}<b>미제출</b>{% endif %}</li>
+      <li>최종 저장: {% if state.finalized %}<b>완료</b>{% else %}<b>미완료</b>{% endif %}</li>
+    </ul>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+    <a class="pill" href="/teacher/class/{{ code }}/v2?sid={{ sid }}&open=1" style="text-decoration:none;">v2 페이지로 돌아가기</a>
+    <a class="pill" href="/teacher/class/{{ code }}/legacy?sid={{ sid }}" style="text-decoration:none;">(legacy) 기존 화면</a>
+  </div>
+
+  <hr style="margin:16px 0;">
+
+  <div class="subtitle" style="margin-bottom:10px;">
+    이 화면은 “운영 최소 구성” 버전입니다. 다음 단계에서 군집/밀집/고립 요약과 비교 리포트를 여기에 확장합니다.
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>학생 입장</h2>
+  <p class="subtitle">{{ session_label }} 측정 링크로 들어왔어요. 이름만 입력하면 시작할 수 있습니다.</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="sid" value="{{ sid }}">
+    학급 코드<br><input value="{{ code }}" disabled><br><br>
+    회차<br><input value="{{ session_label }}" disabled><br><br>
+    이름<br><input name="name" placeholder="학생 이름"><br><br>
+    <button>시작하기</button>
+  </form>
+</div>
+{% endblock %}
