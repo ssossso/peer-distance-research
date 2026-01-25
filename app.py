@@ -26,7 +26,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session
 from io import BytesIO
-from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -1306,6 +1305,17 @@ def inject_globals() -> Dict[str, Any]:
 
 
 def build_student_pin_pdf(class_name: str, sid: str, students):
+      # ---- Lazy imports: prevent whole app from failing if reportlab not installed
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    buf = BytesIO()
+    page_w, page_h = landscape(A4)
+    c = canvas.Canvas(buf, pagesize=(page_w, page_h))
+
+    tz = ZoneInfo("Asia/Seoul")
+    date_str = datetime.now(tz).strftime("%Y.%m.%d")
     """
     Builds a paged PDF (10 students per page) for student login PIN codes.
 
