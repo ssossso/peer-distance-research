@@ -648,21 +648,52 @@ def db_create_class(teacher_username: str, class_code: str, class_name: str, stu
     if not engine:
         raise RuntimeError("DB engine not initialized")
 
+    import random
+
+    def make_pin(existing: set) -> str:
+        # 6자리 숫자: 학급 내부에서만 유일하면 됨
+        # (000000도 가능하지만 헷갈리므로 100000~999999 권장)
+        for _ in range(2000):
+            pin = str(random.randint(100000, 999999))
+            if pin not in existing:
+                existing.add(pin)
+                return pin
+        # 최악의 경우(거의 없음): 순차 발급
+        pin = "100000"
+        while pin in existing:
+            pin = str(int(pin) + 1)
+        existing.add(pin)
+        return pin
+
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO classes (code, name, teacher_username)
             VALUES (:code, :name, :t)
         """), {"code": class_code, "name": class_name, "t": teacher_username})
 
+        existing_pins: set = set()
+
         for s in students:
+            nm = (s.get("name") or "").strip()
+            if not nm:
+                continue
+
+            pin = make_pin(existing_pins)
+            gender = (s.get("gender") or "").upper()
+            if gender not in ["M", "F"]:
+                gender = ""
+
             conn.execute(text("""
-                INSERT INTO students (class_code, student_no, name)
-                VALUES (:code, :no, :name)
+                INSERT INTO students (class_code, student_no, name, gender, pin_code, active, joined_at)
+                VALUES (:code, :no, :name, :gender, :pin, TRUE, NOW())
             """), {
                 "code": class_code,
                 "no": str(s.get("no", "") or ""),
-                "name": (s.get("name") or "").strip(),
+                "name": nm,
+                "gender": gender,
+                "pin": pin,
             })
+
 
 
 def db_delete_class_for_teacher(class_code: str, teacher_username: str) -> bool:
@@ -1663,12 +1694,34 @@ def create_class():
             line = line.strip()
             if not line:
                 continue
+
             parts = [p.strip() for p in line.split("\t")]
             if len(parts) == 1:
                 parts = [p.strip() for p in line.split(",")]
-            name = parts[-1]
-            parsed.append({"no": str(auto_no), "name": name})
+
+            # 허용 형식:
+            # - (이름만) / (번호, 이름) / (번호, 이름, 성별)
+            name = ""
+            no = ""
+            gender = ""
+
+            if len(parts) == 1:
+                name = parts[0]
+                no = str(auto_no)
+            elif len(parts) == 2:
+                no, name = parts[0], parts[1]
+            else:
+                no, name, gender = parts[0], parts[1], (parts[2] or "").upper()
+
+            if not name:
+                continue
+
+            if gender not in ["M", "F"]:
+                gender = ""
+
+            parsed.append({"no": str(no or auto_no), "name": name, "gender": gender})
             auto_no += 1
+
 
         if engine:
             db_create_class(
