@@ -962,7 +962,7 @@ def db_create_teacher_run(class_code: str, teacher_username: str, sid: str, cond
             "placements_json": json.dumps({}, ensure_ascii=False),
         }).fetchone()
 
-    return int(row.id)
+   return int(row[0])
 
 
 
@@ -1013,10 +1013,11 @@ def db_update_teacher_run_placements(run_id: int, placements: Dict[str, Any]) ->
     with engine.begin() as conn:
         conn.execute(text("""
             UPDATE teacher_placement_runs
-            SET placements = :placements::jsonb,
+            SET placements = CAST(:placements AS jsonb),
                 placements_json = :placements_json
             WHERE id = :id
         """), {"placements": placements_str, "placements_json": placements_str, "id": run_id})
+
 
 
 def db_complete_teacher_run(run_id: int, duration_ms: int, confidence_score: int) -> None:
@@ -1044,7 +1045,7 @@ def db_replace_teacher_decisions(run_id: int, decisions: List[Dict[str, Any]]) -
             conn.execute(text("""
                 INSERT INTO teacher_decisions
                 (run_id, target_student_name, priority_rank, decision_confidence, reason_tags)
-                VALUES (:run_id, :name, :rank, :conf, :tags::jsonb)
+                VALUES (:run_id, :name, :rank, :conf, CAST(:tags AS jsonb))
             """), {
                 "run_id": run_id,
                 "name": (d.get("name") or "").strip(),
@@ -1052,6 +1053,7 @@ def db_replace_teacher_decisions(run_id: int, decisions: List[Dict[str, Any]]) -
                 "conf": int(d.get("confidence") or 0) if d.get("confidence") is not None else None,
                 "tags": json.dumps(d.get("tags") or [], ensure_ascii=False),
             })
+
 
 
 # -------------------------
@@ -1082,10 +1084,11 @@ def cache_set(class_code: str, sid: str, key: str, payload: Dict[str, Any]) -> N
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO analysis_cache (class_code, session_id, cache_key, payload, updated_at)
-            VALUES (:c, :s, :k, :p::jsonb, NOW())
+            VALUES (:c, :s, :k, CAST(:p AS jsonb), NOW())
             ON CONFLICT (class_code, session_id, cache_key)
             DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
         """), {"c": class_code, "s": sid, "k": key, "p": payload_str})
+
 
 
 # -------------------------
