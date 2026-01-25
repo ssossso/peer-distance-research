@@ -2666,6 +2666,17 @@ def teacher_placement_write(run_id: int):
     all_names = [s["name"] for s in students]
     placements = run.get("placements") or {}
 
+    # ✅ placements가 "모든 학생 포함"이면 완료로 판단
+    placements_complete = False
+    try:
+        placements_complete = all((n in placements) for n in all_names) and len(all_names) > 0
+    except Exception:
+        placements_complete = False
+
+    # ✅ 기본은 읽기 전용(완료된 경우). 수정하고 싶으면 ?edit=1
+    edit_mode = (request.args.get("edit") or "").strip() == "1"
+    readonly = placements_complete and (not edit_mode)
+
     if request.method == "POST":
         placements_json = (request.form.get("placements_json") or "{}").strip()
         try:
@@ -2683,7 +2694,11 @@ def teacher_placement_write(run_id: int):
         sid=sid,
         friends=all_names,
         placements=placements,
+        placements_complete=placements_complete,
+        readonly=readonly,
+        edit_mode=edit_mode,
     )
+
 
 @app.route("/teacher/placement/<int:run_id>/complete", methods=["GET", "POST"])
 def teacher_placement_complete(run_id: int):
