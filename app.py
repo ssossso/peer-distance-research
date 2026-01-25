@@ -1098,7 +1098,8 @@ def db_create_teacher_run(class_code: str, teacher_username: str, sid: str, cond
             "placements_json": json.dumps({}, ensure_ascii=False),
         }).fetchone()
 
-   return int(row[0])
+    return int(row[0])
+
 
 
 
