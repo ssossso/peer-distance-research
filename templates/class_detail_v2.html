@@ -316,15 +316,15 @@
         </div>
       {% endfor %}
 
-      {# 다운로드 버튼: 학생 안내 박스 맨 하단(오른쪽 정렬) #}
+      {# 다운로드 버튼: 학생 참여 현황 박스 맨 하단(오른쪽 정렬) #}
       <div class="btn-row" style="justify-content:flex-end; margin-top:12px;">
         <a
-          class="pill action-btn dl-pill"
+          class="pill action-btn"
           href="/teacher/class/{{ code }}/student_pin_pdf?sid={{ sid }}"
-          style="text-decoration:none;"
+          style="text-decoration:none; display:inline-flex; align-items:center; gap:8px;"
           title="학생 로그인 PIN PDF 다운로드"
         >
-          학생_로그인_PIN.pdf
+          <span>학생_로그인_PIN.pdf</span>
           <svg
             stroke="currentColor"
             fill="currentColor"
@@ -342,6 +342,7 @@
     </div>
   </div>
 </div>
+
 
 
       {# --------------- 회차 마무리 --------------- #}
