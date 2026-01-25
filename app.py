@@ -239,12 +239,117 @@ def init_db() -> None:
         ]))
 
         # -------------------
-        # Migration v2: reserved for future additions
+        # Migration v2: roster(gender/pin/active) + finalize + artifacts
         # -------------------
         migrations.append((2, [
-            # Example:
-            # "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS some_new_col TEXT;",
+            # --- 학생 관리(전입/전출/성별/개인코드) ---
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS gender TEXT;",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS pin_code TEXT;",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT NOW();",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;",
+
+            # 학급 내 pin 중복 방지(학급 단위로만 유일하면 됨)
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_students_class_pin
+            ON students (class_code, pin_code);
+            """,
+
+            # --- 회차 마무리 상태(회차당 1행) ---
+            """
+            CREATE TABLE IF NOT EXISTS session_finalizations (
+                id SERIAL PRIMARY KEY,
+                class_code TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                teacher_username TEXT NOT NULL,
+
+                preview_seen BOOLEAN DEFAULT FALSE,
+                preview_seen_at TIMESTAMP,
+
+                exclusions_resolved BOOLEAN DEFAULT FALSE,
+                exclusions_resolved_at TIMESTAMP,
+
+                survey_submitted BOOLEAN DEFAULT FALSE,
+                survey_submitted_at TIMESTAMP,
+
+                finalized BOOLEAN DEFAULT FALSE,
+                finalized_at TIMESTAMP,
+
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(class_code, session_id)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS ix_session_finalizations_class_session
+            ON session_finalizations (class_code, session_id);
+            """,
+
+            # --- 참여 제외 기록(학생 단위) ---
+            """
+            CREATE TABLE IF NOT EXISTS session_exclusions (
+                id SERIAL PRIMARY KEY,
+                class_code TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                student_name TEXT NOT NULL,
+                excluded BOOLEAN DEFAULT TRUE,
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(class_code, session_id, student_name)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS ix_session_exclusions_class_session
+            ON session_exclusions (class_code, session_id);
+            """,
+
+            # --- 교사 설문(회차당 1행) ---
+            """
+            CREATE TABLE IF NOT EXISTS teacher_surveys (
+                id SERIAL PRIMARY KEY,
+                class_code TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                teacher_username TEXT NOT NULL,
+
+                q1_help INTEGER,
+                q2_new TEXT,
+                q2_detail TEXT,
+                q3_use INTEGER,
+                q4_cmp TEXT,
+                q4_detail TEXT,
+                q5_conf TEXT,
+                q6_next TEXT,
+                q7_feedback TEXT,
+
+                submitted_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(class_code, session_id)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS ix_teacher_surveys_class_session
+            ON teacher_surveys (class_code, session_id);
+            """,
+
+            # --- 회차 결과 스냅샷(논문 재현성/추적용) ---
+            """
+            CREATE TABLE IF NOT EXISTS session_artifacts (
+                id SERIAL PRIMARY KEY,
+                class_code TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                artifact_key TEXT NOT NULL,
+                artifact_version TEXT NOT NULL,
+                params JSONB,
+                payload JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(class_code, session_id, artifact_key)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS ix_session_artifacts_class_session
+            ON session_artifacts (class_code, session_id);
+            """,
         ]))
+
 
         migrations.sort(key=lambda x: int(x[0]))
         for target_version, stmts in migrations:
