@@ -8,7 +8,6 @@
   </div>
 
   <form method="post" id="completeForm">
-    <input type="hidden" name="duration_ms" id="duration_ms" value="0">
 
     <!-- 확신도: 슬라이더(0~100 int 저장) -->
     <div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa; margin-bottom:12px;">
@@ -72,13 +71,9 @@
 
 <script>
   // -------------------------
-  // 시간 측정
+  // 시간 측정 로직 제거: 연구 데이터로 사용하지 않음
   // -------------------------
-  const startedAt = Date.now();
-  document.getElementById('completeForm').addEventListener('submit', () => {
-    const ms = Math.max(0, Date.now() - startedAt);
-    document.getElementById('duration_ms').value = String(ms);
-  });
+
 
   // -------------------------
   // 우선순위 선택 UI (최대 3명)
