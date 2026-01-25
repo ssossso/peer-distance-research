@@ -25,6 +25,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session
+from io import BytesIO
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.pdfbase.pdfmetrics import stringWidth
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from urllib.parse import quote, unquote
@@ -1289,6 +1297,114 @@ def inject_globals() -> Dict[str, Any]:
 # Debug routes
 # -------------------------
 
+
+
+def build_student_pin_pdf(class_name: str, sid: str, students):
+    """Builds a paged PDF (10 students per page) for student login PIN codes."""
+    buf = BytesIO()
+    page_w, page_h = landscape(A4)
+    c = canvas.Canvas(buf, pagesize=(page_w, page_h))
+
+    tz = ZoneInfo("Asia/Seoul")
+    date_str = datetime.now(tz).strftime("%Y.%m.%d")
+
+    top_h = page_h * 0.60
+    bottom_h = page_h * 0.40
+
+    margin_x = 36
+    margin_top = 28
+    bottom_y0 = 24
+    bottom_y1 = bottom_y0 + bottom_h
+
+    # ~200% sizing
+    title_fs = 34
+    meta_fs = 18
+    sub_fs = 20
+    name_fs = 24
+    pin_fs = 34
+
+    per_page = 10
+
+    def draw_pin_cell(x0, x1, y0, y1, name, pin_code):
+        cell_w = x1 - x0
+        cell_h = y1 - y0
+
+        # Name (horizontal)
+        c.setFont("Helvetica-Bold", name_fs)
+        name_text = (name or "").strip()
+        name_y = y0 + cell_h * 0.70
+
+        max_w = cell_w * 0.90
+        if stringWidth(name_text, "Helvetica-Bold", name_fs) > max_w:
+            fs = name_fs
+            while fs > 12 and stringWidth(name_text, "Helvetica-Bold", fs) > max_w:
+                fs -= 1
+            c.setFont("Helvetica-Bold", fs)
+
+        c.drawCentredString((x0 + x1) / 2, name_y, name_text)
+
+        # PIN (rotated) + underline to avoid 6/9 confusion
+        pin = (pin_code or "").strip()
+        cx = (x0 + x1) / 2
+        cy = y0 + cell_h * 0.28
+
+        c.saveState()
+        c.translate(cx, cy)
+        c.rotate(90)
+        c.setFont("Helvetica-Bold", pin_fs)
+
+        text_w = stringWidth(pin, "Helvetica-Bold", pin_fs)
+        c.drawString(-text_w / 2, 0, pin)
+
+        underline_y = -3
+        c.setLineWidth(1.5)
+        c.line(-text_w / 2, underline_y, text_w / 2, underline_y)
+        c.restoreState()
+
+    def draw_page(page_students):
+        # TOP (60%)
+        c.setFont("Helvetica-Bold", title_fs)
+        c.drawCentredString(page_w / 2, page_h - margin_top - 10, "<우리반 관계 지도>")
+
+        c.setFont("Helvetica-Bold", meta_fs)
+        meta1 = f"{class_name}  |  {sid}회차  |  {date_str}"
+        c.drawCentredString(page_w / 2, page_h - margin_top - 10 - 46, meta1)
+
+        c.setFont("Helvetica", sub_fs)
+        c.drawCentredString(page_w / 2, page_h - margin_top - 10 - 46 - 28, "학생 로그인 PIN 코드")
+
+        # BOTTOM (40%): one row, 10 columns
+        usable_w = page_w - margin_x * 2
+        col_w = usable_w / 10.0
+
+        # Vertical dotted cut guides only (no outlines, no horizontal rules)
+        c.setDash(3, 4)
+        c.setLineWidth(1.2)
+        for i in range(1, 10):
+            x = margin_x + col_w * i
+            c.line(x, bottom_y0, x, bottom_y1)
+        c.setDash()
+
+        for i in range(10):
+            x0 = margin_x + col_w * i
+            x1 = x0 + col_w
+            if i < len(page_students):
+                st = page_students[i]
+                draw_pin_cell(x0, x1, bottom_y0, bottom_y1, st.get("name", ""), st.get("pin_code", ""))
+
+    total = len(students or [])
+    pages = (total + per_page - 1) // per_page if total > 0 else 1
+
+    for p in range(pages):
+        chunk = (students or [])[p * per_page:(p + 1) * per_page]
+        draw_page(chunk)
+        if p < pages - 1:
+            c.showPage()
+
+    c.save()
+    buf.seek(0)
+    return buf
+
 @app.route("/debug/db")
 def debug_db():
     if not engine:
@@ -1501,7 +1617,7 @@ def teacher_resume_session(class_code: str, sid: str):
 
     # 1) 해당 teacher/class/sid의 최신 run 찾기 (없으면 생성)
     run_id = db_get_latest_teacher_run_id(class_code, session["teacher"], sid)
-   if not run_id:
+    if not run_id:
        run_id = db_create_teacher_run(class_code, session["teacher"], sid, condition="BASELINE", tool_run_id=None)
 
     run = db_get_teacher_run(run_id)
@@ -2022,6 +2138,35 @@ def class_detail_legacy(code):
 
     return render_template("class_detail.html", cls=cls, code=code, rows=rows, sid=sid, session_links=session_links)
 
+
+@app.route("/teacher/class/<code>/student_pin_pdf")
+def teacher_download_student_pin_pdf(code):
+    if "teacher" not in session:
+        return redirect(url_for("teacher_login"))
+
+    sid = request.args.get("sid") or "1"
+
+    # 권한 확인 + 학급명 확보
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls:
+        flash("해당 학급에 접근 권한이 없습니다.", "error")
+        return redirect(url_for("teacher_home"))
+
+    class_name = cls.get("name") or code
+
+    # 학생 + pin_code
+    students = db_get_students_with_pin(code)
+
+    pdf_io = build_student_pin_pdf(class_name=class_name, sid=sid, students=students)
+
+    filename = "학생_로그인_PIN.pdf"
+    return send_file(
+        pdf_io,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename
+    )
+
 @app.route("/teacher/class/<code>/v2")
 def class_detail_v2(code):
     """Parallel rebuild: new class detail UI (v2).
@@ -2402,58 +2547,58 @@ def student_enter_session(code, sid):
     if sid not in (cls.get("sessions") or {}):
         sid = "1"
 
-if request.method == "POST":
-    name = request.form.get("name", "").strip()
-    pin = (request.form.get("pin") or "").strip()
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        pin = (request.form.get("pin") or "").strip()
 
-    if name not in (cls.get("students_data") or {}):
-        return render_template(
-            "student_enter_session.html",
-            error="학생 명단에 없는 이름입니다.",
-            code=code,
-            sid=sid,
-            session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
-        )
-
-    # 6자리 숫자만 허용
-    if not (len(pin) == 6 and pin.isdigit()):
-        return render_template(
-            "student_enter_session.html",
-            error="개인 코드는 6자리 숫자여야 합니다.",
-            code=code,
-            sid=sid,
-            session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
-        )
-
-    # DB에서 pin 검증 (active 학생만)
-    if engine:
-        with engine.connect() as conn:
-            s_row = conn.execute(text("""
-                SELECT 1
-                FROM students
-                WHERE class_code = :code
-                  AND name = :name
-                  AND pin_code = :pin
-                  AND active = TRUE
-                LIMIT 1
-            """), {"code": code, "name": name, "pin": pin}).fetchone()
-
-        if not s_row:
+        if name not in (cls.get("students_data") or {}):
             return render_template(
                 "student_enter_session.html",
-                error="입장 실패(이름/코드가 맞지 않습니다).",
+                error="학생 명단에 없는 이름입니다.",
                 code=code,
                 sid=sid,
                 session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
             )
 
-    session["code"] = code
-    session["name"] = name
-    session["sid"] = sid
-    session["selected_class"] = code
-    session["selected_session"] = sid
+        # 6자리 숫자만 허용
+        if not (len(pin) == 6 and pin.isdigit()):
+            return render_template(
+                "student_enter_session.html",
+                error="개인 코드는 6자리 숫자여야 합니다.",
+                code=code,
+                sid=sid,
+                session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+            )
 
-    return redirect("/student/write")
+        # DB에서 pin 검증 (active 학생만)
+        if engine:
+            with engine.connect() as conn:
+                s_row = conn.execute(text("""
+                    SELECT 1
+                    FROM students
+                    WHERE class_code = :code
+                      AND name = :name
+                      AND pin_code = :pin
+                      AND active = TRUE
+                    LIMIT 1
+                """), {"code": code, "name": name, "pin": pin}).fetchone()
+
+            if not s_row:
+                return render_template(
+                    "student_enter_session.html",
+                    error="입장 실패(이름/코드가 맞지 않습니다).",
+                    code=code,
+                    sid=sid,
+                    session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+                )
+
+        session["code"] = code
+        session["name"] = name
+        session["sid"] = sid
+        session["selected_class"] = code
+        session["selected_session"] = sid
+
+        return redirect("/student/write")
 
 
     return render_template(
@@ -3464,3 +3609,27 @@ def analysis_kmeans_summary(code, sid):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port)
+
+
+def db_get_students_with_pin(class_code: str):
+    """Returns a list of dicts: [{no:int, name:str, pin_code:str}, ...]"""
+    if not engine:
+        raise RuntimeError("DB engine not initialized")
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT student_no, name, pin_code
+            FROM students
+            WHERE class_code = :code
+              AND active = TRUE
+            ORDER BY id ASC
+        """), {"code": class_code}).fetchall()
+
+    out = []
+    for r in rows:
+        out.append({
+            "no": int(r[0]) if r[0] is not None else None,
+            "name": (r[1] or "").strip(),
+            "pin_code": str(r[2] or "").strip(),
+        })
+    return out
