@@ -2573,11 +2573,14 @@ def teacher_view_student_result(code, sid, url_name):
 # Student entry
 # -------------------------
 
+from urllib.parse import quote  # app.py 상단에 없으면 추가하세요.
+
 @app.route("/s/<code>/<sid>", methods=["GET", "POST"])
 def student_enter_session(code, sid):
     code = (code or "").upper().strip()
     sid = (sid or "1").strip()
 
+    # 1) 학급 조회 + 스키마 구성
     if engine:
         with engine.connect() as conn:
             row = conn.execute(text("""
@@ -2590,26 +2593,35 @@ def student_enter_session(code, sid):
         if not row:
             return "학급을 찾을 수 없습니다.", 404
 
-        cls = ensure_class_schema({"code": code, "name": row.name, "teacher": row.teacher_username, "sessions": {}})
-        students = db_get_students_in_class(code)
+        cls = ensure_class_schema({
+            "code": code,
+            "name": row.name,
+            "teacher": row.teacher_username,
+            "sessions": {}
+        })
+
+        students = db_get_students_in_class(code)  # 이 함수가 active 컬럼을 쓰는지 확인 필요
         cls["students"] = students
         cls["students_data"] = {s["name"]: {"sessions": {}} for s in students}
+
     else:
         d = load_data()
         cls = ensure_class_schema(d.get("classes", {}).get(code))
         if not cls:
             return "학급을 찾을 수 없습니다.", 404
 
+    # 2) sid 보정
     if sid not in (cls.get("sessions") or {}):
         sid = "1"
 
     session_label = (cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차")
 
+    # 3) POST: 이름 + PIN 검증
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         pin = (request.form.get("pin") or "").strip()
 
-        # 1) 이름 검증 (명단 기반)
+        # (1) 이름 검증: 명단 기반
         if not name or name not in (cls.get("students_data") or {}):
             return render_template(
                 "student_enter_session.html",
@@ -2619,7 +2631,7 @@ def student_enter_session(code, sid):
                 session_label=session_label,
             )
 
-        # 2) PIN 형식 검증 (6자리 숫자)
+        # (2) PIN 형식 검증: 6자리 숫자
         if not (len(pin) == 6 and pin.isdigit()):
             return render_template(
                 "student_enter_session.html",
@@ -2629,7 +2641,7 @@ def student_enter_session(code, sid):
                 session_label=session_label,
             )
 
-        # 3) DB 기반 PIN 일치 검증
+        # (3) DB에서 PIN 일치 검증 (active 학생만)
         if engine:
             with engine.connect() as conn:
                 r = conn.execute(text("""
@@ -2651,26 +2663,19 @@ def student_enter_session(code, sid):
                     session_label=session_label,
                 )
 
-        else:
-            # JSON 모드(로컬)에서는 PIN 검증을 스킵하거나,
-            # cls["students_data"]에 pin을 저장하는 구조라면 그에 맞춰 비교하세요.
-            # 여기서는 안전하게 "검증 없음"으로 둡니다.
-            pass
-
-        # 4) 세션 진입 처리: 서버에서 name/sid/code를 기억시키고 학생 작성 화면으로 이동
-        #    (당신 프로젝트에 이미 존재하는 write 라우트로 맞춰야 합니다.)
-        session["student_name"] = name
-        session["class_code"] = code
+        # 4) 세션에 저장 (프로젝트 다른 라우트들과 호환되게)
+        session["name"] = name
+        session["code"] = code
         session["sid"] = sid
+        session["selected_class"] = code
+        session["selected_session"] = sid
 
-        # 가장 흔한 형태 1: /student/write/<code>/<sid>?name=...
-        # 존재하지 않으면 2번 형태로 fallback
-        try:
-            return redirect(f"/student/write/{code}/{sid}?name={quote(name)}")
-        except Exception:
-            return redirect(f"/student/write?code={code}&sid={sid}&name={quote(name)}")
+        # 5) 학생 작성 화면으로 이동
+        # 프로젝트에 /student/write 라우트가 있다고 가정하는 "가장 안전한" 형태
+        # 만약 기존 라우트가 querystring을 요구하면 ?code=...&sid=... 형태로 바꾸세요.
+        return redirect("/student/write")
 
-    # GET: 진입 페이지 렌더
+    # 6) GET: 진입 페이지 렌더
     return render_template(
         "student_enter_session.html",
         error=None,
