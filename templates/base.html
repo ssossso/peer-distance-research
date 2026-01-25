@@ -278,15 +278,18 @@
 </head>
 
 <body>
-  <div class="navbar">
-    <div class="nav-side">
-      {% if session.teacher %}
-        <a href="/teacher/dashboard">내 학급</a>
-      {% endif %}
-      {% if current_class %}
-        <span class="muted">현재 선택: {{ current_class.name }}, 코드: {{ current_class.code }}</span>
-      {% endif %}
-    </div>
+<div class="navbar">
+  <div class="nav-side">
+    {% if session.teacher %}
+      <a href="/teacher/dashboard">내 학급</a>
+    {% endif %}
+    {% if current_class %}
+      <span class="muted">
+        <b>{{ current_class.name }}</b>
+        · {{ current_class.code }}
+      </span>
+    {% endif %}
+  </div>
 
 <div class="nav-title">
   <a href="/">
