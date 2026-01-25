@@ -10,11 +10,14 @@
     <span class="muted" style="margin-left:8px;">
       {{ run.session_id }}차
     </span>
-    {% if run.submitted %}
-      <span class="status" style="margin-left:8px;">저장 완료</span>
-    {% else %}
-      <span class="muted" style="margin-left:8px;">작성 중</span>
-    {% endif %}
+  {% if run.submitted %}
+    <span class="status" style="margin-left:8px;">마무리 완료</span>
+  {% elif placements_complete %}
+    <span class="status" style="margin-left:8px;">배치 저장됨</span>
+  {% else %}
+    <span class="muted" style="margin-left:8px;">작성 중</span>
+  {% endif %}
+
   </p>
 
   <div class="subtitle" style="text-align:left; margin-bottom:12px;">
@@ -66,12 +69,22 @@
         <hr style="border:none; border-top:1px solid #e5e7eb; margin:12px 0;">
 
         <div style="display:flex; gap:8px;">
-          {% if not run.submitted %}
-            <button type="submit" style="flex:1;">배치 저장</button>
+          {% if run.submitted %}
+            <button type="button" disabled style="flex:1; opacity:0.6;">마무리 완료</button>
+          {% elif readonly %}
+            <a class="btn" href="/teacher/placement/{{ run.id }}/complete"
+               style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+              마무리 단계로 이동
+            </a>
+            <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
+               style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+              배치 수정하기
+            </a>
           {% else %}
-            <button type="button" disabled style="flex:1; opacity:0.6;">저장 완료</button>
+            <button type="submit" style="flex:1;">배치 저장</button>
           {% endif %}
         </div>
+
 
         {% if not run.submitted %}
           <div class="muted" style="margin-top:10px; font-size:12px;">
@@ -94,7 +107,7 @@
 </style>
 
 <script>
-  const READONLY = {{ 'true' if run.submitted else 'false' }};
+  const READONLY = {{ 'true' if (run.submitted or readonly) else 'false' }};
   const friends = {{ friends|tojson }};
   const initialPlacements = {{ placements|tojson }};
 
