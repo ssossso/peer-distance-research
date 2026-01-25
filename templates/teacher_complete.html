@@ -15,22 +15,8 @@
 
       <input type="range" name="confidence_score" min="0" max="100" value="50"
              style="width:100%;">
-
-      <!-- 숫자/예시 문구는 요청대로 제거 -->
     </div>
 
-
-  <form method="post" id="completeForm">
-    <input type="hidden" name="duration_ms" id="duration_ms" value="0">
-
-    <div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa; margin-bottom:12px;">
-      <div style="font-weight:800; margin-bottom:8px;">확신도(0~100)</div>
-      <input type="number" name="confidence_score" min="0" max="100" value="0"
-             style="width:140px; padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
-      <div class="muted" style="font-size:12px; margin-top:6px;">
-        예: 0(전혀 확신 없음) ~ 100(매우 확신)
-      </div>
-    </div>
 
     <!-- 우선순위 제출용 hidden input -->
     <input type="hidden" name="priority_1" id="priority_1" value="">
@@ -238,6 +224,8 @@
   function makeDot(name){
     const el = document.createElement('div');
     el.textContent = name;
+    el.dataset.name = name; // ✅ 어떤 학생 점인지 표시
+
     el.style.position = 'absolute';
     el.style.transform = 'translate(-50%, -50%)';
     el.style.fontSize = '12px';
@@ -247,8 +235,11 @@
     el.style.borderRadius = '999px';
     el.style.background = '#fff';
     el.style.whiteSpace = 'nowrap';
+    el.style.transition = 'border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease';
+
     return el;
   }
+
 
   function renderPreview(){
     preview.innerHTML = "";
@@ -275,8 +266,31 @@
       dot.style.top = (ny * h) + 'px';
       preview.appendChild(dot);
     });
+
+    // ✅ 미리보기 그린 뒤, 현재 선택 상태를 반영해서 강조
+    highlightSelectedDots();
   }
 
+  function highlightSelectedDots(){
+    // previewCanvas 안의 모든 점을 순회하면서 선택된 학생이면 강조
+    const dots = preview.querySelectorAll('[data-name]');
+    dots.forEach(dot => {
+      const nm = dot.dataset.name;
+      const isPicked = selected.includes(nm);
+
+      if (isPicked){
+        dot.style.borderColor = '#111827';
+        dot.style.boxShadow = '0 0 0 3px rgba(17, 24, 39, 0.12)';
+        dot.style.background = '#f9fafb';
+      } else {
+        dot.style.borderColor = '#d1d5db';
+        dot.style.boxShadow = 'none';
+        dot.style.background = '#fff';
+      }
+    });
+  }
+
+  
   // 레이아웃이 잡힌 뒤 그리기
   setTimeout(renderPreview, 0);
   window.addEventListener('resize', () => renderPreview());
