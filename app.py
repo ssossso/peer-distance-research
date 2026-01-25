@@ -766,12 +766,14 @@ def db_get_students_in_class(class_code: str) -> List[Dict[str, str]]:
         raise RuntimeError("DB engine not initialized")
 
     with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT student_no, name
-            FROM students
-            WHERE class_code = :code
-            ORDER BY id ASC
-        """), {"code": class_code}).fetchall()
+rows = conn.execute(text("""
+    SELECT student_no, name
+    FROM students
+    WHERE class_code = :code
+      AND active = TRUE
+    ORDER BY id ASC
+"""), {"code": class_code}).fetchall()
+
 
     out: List[Dict[str, str]] = []
     for r in rows:
@@ -1490,8 +1492,8 @@ def teacher_resume_session(class_code: str, sid: str):
 
     # 1) 해당 teacher/class/sid의 최신 run 찾기 (없으면 생성)
     run_id = db_get_latest_teacher_run_id(class_code, session["teacher"], sid)
-    if not run_id:
-        run_id = db_create_teacher_run(class_code, session["teacher"], sid, condition="default", tool_run_id=None)
+   if not run_id:
+       run_id = db_create_teacher_run(class_code, session["teacher"], sid, condition="BASELINE", tool_run_id=None)
 
     run = db_get_teacher_run(run_id)
     if not run:
@@ -2391,24 +2393,59 @@ def student_enter_session(code, sid):
     if sid not in (cls.get("sessions") or {}):
         sid = "1"
 
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        if name not in (cls.get("students_data") or {}):
+if request.method == "POST":
+    name = request.form.get("name", "").strip()
+    pin = (request.form.get("pin") or "").strip()
+
+    if name not in (cls.get("students_data") or {}):
+        return render_template(
+            "student_enter_session.html",
+            error="학생 명단에 없는 이름입니다.",
+            code=code,
+            sid=sid,
+            session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+        )
+
+    # 6자리 숫자만 허용
+    if not (len(pin) == 6 and pin.isdigit()):
+        return render_template(
+            "student_enter_session.html",
+            error="개인 코드는 6자리 숫자여야 합니다.",
+            code=code,
+            sid=sid,
+            session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
+        )
+
+    # DB에서 pin 검증 (active 학생만)
+    if engine:
+        with engine.connect() as conn:
+            s_row = conn.execute(text("""
+                SELECT 1
+                FROM students
+                WHERE class_code = :code
+                  AND name = :name
+                  AND pin_code = :pin
+                  AND active = TRUE
+                LIMIT 1
+            """), {"code": code, "name": name, "pin": pin}).fetchone()
+
+        if not s_row:
             return render_template(
                 "student_enter_session.html",
-                error="학생 명단에 없는 이름입니다.",
+                error="입장 실패(이름/코드가 맞지 않습니다).",
                 code=code,
                 sid=sid,
                 session_label=(cls.get("sessions") or {}).get(sid, {}).get("label", f"{sid}차"),
             )
 
-        session["code"] = code
-        session["name"] = name
-        session["sid"] = sid
-        session["selected_class"] = code
-        session["selected_session"] = sid
+    session["code"] = code
+    session["name"] = name
+    session["sid"] = sid
+    session["selected_class"] = code
+    session["selected_session"] = sid
 
-        return redirect("/student/write")
+    return redirect("/student/write")
+
 
     return render_template(
         "student_enter_session.html",
