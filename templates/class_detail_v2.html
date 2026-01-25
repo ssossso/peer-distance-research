@@ -23,8 +23,46 @@
   .pill:hover{ border-color:#9ca3af; }
 
   .round-row{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin:10px 0 4px 0; }
-  .round-pill{ min-width:120px; }
-  .round-pill.active{ background:#4a6cf7; color:#fff; border-color:#4a6cf7; }
+
+  /* v2: round selector as rounded squares */
+  .round-pill{
+    width:140px;
+    height:140px;
+    border-radius:20px;
+    border:1.5px solid #d1d5db;
+    background:#fff;
+    padding:14px 14px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;   /* left align */
+    justify-content:center;
+    gap:8px;
+  }
+  .round-pill:hover{ border-color:#9ca3af; }
+
+  .round-pill.active{
+    background:#4a6cf7;
+    color:#fff;
+    border-color:#4a6cf7;
+  }
+  .round-pill.active .round-title,
+  .round-pill.active .round-sub{
+    color:#fff;
+  }
+
+  .round-title{
+    font-size:21px;           /* 14px * 1.5 = 21px */
+    font-weight:950;
+    line-height:1.05;
+    text-align:left;
+  }
+  .round-sub{
+    font-size:21px;           /* same size as 'n회차' */
+    font-weight:300;          /* thin */
+    color:#6b7280;
+    line-height:1.05;
+    text-align:left;
+  }
 
   .panel{ margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff; overflow:hidden; }
   .panel-hd{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px; background:#f8fafc; border-bottom:1px solid #eef2f7; }
@@ -32,9 +70,19 @@
   .panel-sub{ color:#6b7280; font-weight:700; font-size:12px; }
   .panel-bd{ padding:14px 16px; }
 
-  .step-row{ display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 12px 0; }
+  .step-row{ display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 12px 0; align-items:center; }
   .step-btn{ border:1px solid #d1d5db; background:#fff; }
   .step-btn.active{ border-color:#111827; }
+
+  /* arrows between step buttons */
+  .step-arrow{
+    color:#9ca3af;
+    font-weight:900;
+    font-size:18px;
+    user-select:none;
+    margin:0 2px;
+    line-height:1;
+  }
 
   .content-box{ display:none; border:1px solid #e5e7eb; border-radius:14px; background:#fff; padding:14px; margin-top:10px; }
   .content-box.active{ display:block; }
@@ -74,6 +122,16 @@
   .action-btn.primary:hover{ background:#3955c6; border-color:#3955c6; }
   .action-btn:disabled{ opacity:0.45; cursor:not-allowed; }
 
+  /* ACTIVE look for "toggle-like" finalize buttons */
+  .action-btn.active{
+    border-color:#111827;
+    box-shadow: 0 0 0 1px #111827 inset;
+  }
+  /* Primary + active keeps primary color but shows strong border */
+  .action-btn.primary.active{
+    box-shadow: 0 0 0 1px rgba(17,24,39,0.25) inset;
+  }
+
   .mini-card{ border:1px solid #e5e7eb; border-radius:14px; background:#fff; padding:12px; margin-top:10px; }
   .field-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px; }
   .reason-input{ flex:1; min-width:220px; }
@@ -92,23 +150,19 @@
   <h2 style="margin:0 0 6px 0; text-align:center;">{{ cls.name }}</h2>
   <p style="margin:0 0 14px 0; text-align:center;">학급 코드: <b>{{ code }}</b></p>
 
-  {# -----------------------------------------
-     1) Round selector (first view)
-     - By default, show only the round buttons.
-     - Expand panel only when open_panel=true.
-  ----------------------------------------- #}
-
   <div style="font-weight:900; text-align:center; margin:0 0 8px 0;">측정 회차 선택</div>
 
+  {% set rounds = [("1","3월 말"), ("2","4월 말"), ("3","5월 말"), ("4","6월 말")] %}
   <div class="round-row">
-    {% for n in ["1","2","3","4"] %}
+    {% for n, when in rounds %}
       <a
-        class="pill round-pill {% if open_panel and (sid|string)==(n|string) %}active{% endif %}"
+        class="round-pill {% if open_panel and (sid|string)==(n|string) %}active{% endif %}"
         href="/teacher/class/{{ code }}/v2?sid={{ n }}&open=1"
         style="text-decoration:none;"
         title="{{ n }}차 조사 열기"
       >
-        {{ n }}회차
+        <div class="round-title">{{ n }}회차</div>
+        <div class="round-sub">{{ when }}</div>
       </a>
     {% endfor %}
   </div>
@@ -126,8 +180,11 @@
     <div class="panel-bd">
       <div class="step-row" role="tablist" aria-label="조사 단계">
         <button type="button" class="pill step-btn active" data-step="guide" aria-selected="true">조사 안내</button>
+        <span class="step-arrow" aria-hidden="true">→</span>
         <button type="button" class="pill step-btn" data-step="teacher_map" aria-selected="false">교사 관계 인식 배치</button>
+        <span class="step-arrow" aria-hidden="true">→</span>
         <button type="button" class="pill step-btn" data-step="student_map" aria-selected="false">학생 인식 배치</button>
+        <span class="step-arrow" aria-hidden="true">→</span>
         <button type="button" class="pill step-btn" data-step="finalize" aria-selected="false">회차 마무리</button>
       </div>
 
@@ -175,7 +232,6 @@
         </div>
 
         <div class="two-col">
-          {# QR box #}
           {% set qr_src = '/qr/' ~ code ~ '/' ~ sid ~ '.png' %}
           <div class="qr-box">
             <div style="font-weight:950; margin-bottom:6px;">{{ sid }}차 QR</div>
@@ -192,7 +248,6 @@
             <div class="small" style="margin-top:8px;">QR을 클릭해도 열리지 않으면 팝업 차단을 확인해 주세요.</div>
           </div>
 
-          {# Student list box #}
           <div class="student-list">
             <div style="font-weight:950; margin-bottom:8px;">학생 참여 현황</div>
             <div class="small" style="margin-bottom:10px;">화살표(↗)를 누르면 해당 학생 결과 화면으로 이동합니다.</div>
@@ -225,7 +280,6 @@
           <button type="button" class="action-btn primary" id="btnFinalize" disabled>결과 저장 및 최종 결과 보기</button>
         </div>
 
-        {# 결과 미리 보기(임시) #}
         <div class="mini-card" id="boxPreview" style="display:none;">
           <div style="font-weight:950;">이번 회차 결과 미리 보기</div>
           <div class="small" style="margin-top:6px;">
@@ -236,7 +290,6 @@
           </div>
         </div>
 
-        {# 참여 제외 학생 #}
         <div class="mini-card" id="boxExclude" style="display:none;">
           <div style="font-weight:950;">참여 제외 학생</div>
 
@@ -271,7 +324,6 @@
           {% endif %}
         </div>
 
-        {# 교사 설문 #}
         <div class="mini-card" id="boxSurvey" style="display:none;">
           <div style="font-weight:950;">교사 설문</div>
           <div class="small" style="margin-top:6px;">
@@ -376,7 +428,6 @@
           </div>
         </div>
 
-        {# 최종 저장 #}
         <div class="mini-card" id="boxFinalize" style="display:none;">
           <div style="font-weight:950;">결과 저장</div>
           <div class="small" style="margin-top:6px;">결과가 저장되었습니다. 감사합니다.</div>
@@ -393,7 +444,7 @@
 
 <script>
   // -------------------------------------------------
-  // Step tabs
+  // Step tabs (single-select: switch, not toggle)
   // -------------------------------------------------
   (function(){
     const stepBtns = Array.from(document.querySelectorAll('.step-btn'));
@@ -444,6 +495,7 @@
 
   // -------------------------------------------------
   // Finalize flow (client-side gating for v2 prototype)
+  // - add "active border" on toggle buttons when their box is visible
   // -------------------------------------------------
   const btnPreview = document.getElementById('btnPreview');
   const btnExclude = document.getElementById('btnExclude');
@@ -459,6 +511,12 @@
   let exclusionResolved = false;
   let surveySubmitted = false;
 
+  function setActive(btn, on){
+    if (!btn) return;
+    btn.classList.toggle('active', !!on);
+    btn.setAttribute('aria-pressed', !!on ? 'true' : 'false');
+  }
+
   function updateGates(){
     btnSurvey.disabled = !(previewSeen && exclusionResolved);
     btnFinalize.disabled = !surveySubmitted;
@@ -472,23 +530,32 @@
   if (btnPreview) {
     btnPreview.addEventListener('click', () => {
       previewSeen = true;
-      boxPreview.style.display = (boxPreview.style.display === 'none') ? 'block' : 'none';
+
+      const show = (boxPreview.style.display === 'none');
+      boxPreview.style.display = show ? 'block' : 'none';
+      setActive(btnPreview, show);
+
       updateGates();
     });
   }
   if (btnExclude) {
     btnExclude.addEventListener('click', () => {
-      boxExclude.style.display = (boxExclude.style.display === 'none') ? 'block' : 'none';
+      const show = (boxExclude.style.display === 'none');
+      boxExclude.style.display = show ? 'block' : 'none';
+      setActive(btnExclude, show);
     });
   }
   if (btnSurvey) {
     btnSurvey.addEventListener('click', () => {
-      boxSurvey.style.display = (boxSurvey.style.display === 'none') ? 'block' : 'none';
+      const show = (boxSurvey.style.display === 'none');
+      boxSurvey.style.display = show ? 'block' : 'none';
+      setActive(btnSurvey, show);
     });
   }
   if (btnFinalize) {
     btnFinalize.addEventListener('click', () => {
       boxFinalize.style.display = 'block';
+      setActive(btnFinalize, true);
     });
   }
 
@@ -537,8 +604,12 @@
     });
   }
 
-  // Initial gate state
+  // Initial gate state (also set aria-pressed baseline)
   updateGates();
+  setActive(btnPreview, false);
+  setActive(btnExclude, false);
+  setActive(btnSurvey, false);
+  setActive(btnFinalize, false);
 </script>
 
 {% endblock %}
