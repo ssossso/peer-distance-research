@@ -144,6 +144,42 @@
 
   /* override base card max-width */
   .card.card-wide{ max-width:980px; }
+
+  /* ------------------------------
+     Student PIN download row (clean)
+  ------------------------------ */
+  .dl-row{
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid #eef2f7;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .dl-hint{
+    font-size:12px;
+    color:#6b7280;
+    font-weight:800;
+    line-height:1.35;
+  }
+  .dl-pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding:10px 14px;
+    border-radius:12px;
+    border:1px solid #d1d5db;
+    background:#fff;
+    color:#111827;
+    font-weight:900;
+    text-decoration:none;
+    white-space:nowrap;
+  }
+  .dl-pill:hover{ border-color:#9ca3af; }
+  .dl-pill svg{ width:18px; height:18px; flex:0 0 auto; }
 </style>
 
 <div class="card card-wide">
@@ -262,6 +298,25 @@
               </div>
             {% endfor %}
           </div>
+        </div>
+
+        {# ---- 깔끔한 다운로드 바: 학생 안내 박스 맨 하단 ---- #}
+        <div class="dl-row">
+          <div class="dl-hint">
+            학생 로그인에 필요한 PIN 코드를 PDF로 내려받아<br>
+            학급에서 배부할 수 있습니다.
+          </div>
+
+          <a class="dl-pill"
+             href="/teacher/class/{{ code }}/session/{{ sid }}/pins.pdf"
+             title="학생 로그인 PIN PDF 다운로드">
+            <span>학생_로그인_PIN.pdf</span>
+            <svg stroke="currentColor" fill="currentColor" stroke-width="0"
+                 viewBox="0 0 512 512"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M416 199.5h-91.4V64H187.4v135.5H96l160 158.1 160-158.1zM96 402.8V448h320v-45.2H96z"></path>
+            </svg>
+          </a>
         </div>
       </div>
 
@@ -493,7 +548,6 @@
     }
   }
 
-  
   // -------------------------------------------------
   // Finalize flow (server-connected, v2)
   // -------------------------------------------------
@@ -578,11 +632,7 @@
       surveySubmitted = !!st.survey_submitted;
       finalized = !!st.finalized;
 
-      // If finalized, enable finalize button state and show link
       updateGates();
-
-      // Keep button borders in sync with currently opened boxes (UI choice)
-      // Gates are server-driven, open/close is still client-driven.
     } catch(e){
       // silent
     }
@@ -592,7 +642,6 @@
   if (btnPreview) {
     btnPreview.addEventListener('click', async () => {
       toggleBox(btnPreview, boxPreview);
-      // Mark preview seen on server when user opens it (first time)
       try{
         await apiPost('preview_seen', { preview_seen: true });
         previewSeen = true;
@@ -637,7 +686,6 @@
       updateGates();
     });
 
-    // When all reasons are filled, auto-save exclusions (safe: user can re-edit and resave by typing)
     excludeReasons.addEventListener('change', async () => {
       if (!allReasonsFilled()) return;
       const inputs = Array.from(excludeReasons.querySelectorAll('input[data-reason-for]'));
@@ -702,14 +750,11 @@
         boxFinalize.style.display = 'block';
         setActive(btnFinalize, true);
 
-        // Wire result links
         const a = boxFinalize.querySelector('a[href="#"]');
         if (a && res.result_url) a.href = res.result_url;
 
-        // Also update round card "결과 보기" link if present
         const roundLink = document.querySelector('.round-pill.active');
         if (roundLink && res.result_url){
-          // create a small "결과 보기" pill inside (if not exists)
           let existing = roundLink.querySelector('.round-result');
           if (!existing){
             existing = document.createElement('div');
@@ -735,9 +780,8 @@
         }
 
       }catch(e){
-        // Server returns NOT_READY when gates not met
         if (String(e.message) === 'NOT_READY'){
-          alert('아직 저장할 준비가 완료되지 않았어요.\\n- 미리보기 확인\\n- 참여 제외 처리\\n- 설문 제출\\n을 먼저 완료해 주세요.');
+          alert('아직 저장할 준비가 완료되지 않았어요.\n- 미리보기 확인\n- 참여 제외 처리\n- 설문 제출\n을 먼저 완료해 주세요.');
         } else {
           alert('최종 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
         }
@@ -745,9 +789,7 @@
     });
   }
 
-  // Initial: sync with server state
   refreshFromServer();
-
 </script>
 
 {% endblock %}
