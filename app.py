@@ -1774,6 +1774,108 @@ def teacher_delete_class():
         session.pop("selected_class", None)
     return redirect("/teacher/dashboard")
 
+@app.route("/teacher/class/<code>/students", methods=["GET", "POST"])
+def teacher_manage_students(code: str):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls or cls.get("_forbidden"):
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+
+        # 1) 전입(추가)
+        if action == "add":
+            student_no = (request.form.get("student_no") or "").strip()
+            name = (request.form.get("name") or "").strip()
+            gender = (request.form.get("gender") or "").upper().strip()
+            if gender not in ["M", "F"]:
+                gender = ""
+
+            if name:
+                import random
+                # 학급 내 pin 중복 없이 생성
+                with engine.begin() as conn:
+                    existing = conn.execute(text("""
+                        SELECT pin_code FROM students WHERE class_code=:c
+                    """), {"c": code}).fetchall()
+                    used = {r.pin_code for r in existing if r.pin_code}
+
+                    pin = None
+                    for _ in range(2000):
+                        cand = str(random.randint(100000, 999999))
+                        if cand not in used:
+                            pin = cand
+                            break
+                    if not pin:
+                        pin = "100000"
+                        while pin in used:
+                            pin = str(int(pin) + 1)
+
+                    conn.execute(text("""
+                        INSERT INTO students (class_code, student_no, name, gender, pin_code, active, joined_at)
+                        VALUES (:c, :no, :n, :g, :p, TRUE, NOW())
+                    """), {"c": code, "no": student_no, "n": name, "g": gender, "p": pin})
+
+        # 2) 전출/복귀(활성 토글)
+        if action == "toggle_active":
+            name = (request.form.get("name") or "").strip()
+            make_inactive = (request.form.get("set") or "") == "0"
+            if name:
+                with engine.begin() as conn:
+                    if make_inactive:
+                        conn.execute(text("""
+                            UPDATE students
+                            SET active = FALSE, left_at = NOW()
+                            WHERE class_code = :c AND name = :n
+                        """), {"c": code, "n": name})
+                    else:
+                        conn.execute(text("""
+                            UPDATE students
+                            SET active = TRUE, left_at = NULL
+                            WHERE class_code = :c AND name = :n
+                        """), {"c": code, "n": name})
+
+        # 3) 성별 수정
+        if action == "set_gender":
+            name = (request.form.get("name") or "").strip()
+            gender = (request.form.get("gender") or "").upper().strip()
+            if gender not in ["M", "F", ""]:
+                gender = ""
+            if name:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        UPDATE students
+                        SET gender = :g
+                        WHERE class_code = :c AND name = :n
+                    """), {"c": code, "n": name, "g": gender})
+
+        return redirect(f"/teacher/class/{code}/students")
+
+    # GET: 학생 목록 표시
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT student_no, name, gender, pin_code, active
+            FROM students
+            WHERE class_code = :c
+            ORDER BY id ASC
+        """), {"c": code}).fetchall()
+
+    students = []
+    for r in rows:
+        students.append({
+            "no": r.student_no or "",
+            "name": r.name,
+            "gender": r.gender or "",
+            "pin": r.pin_code or "",
+            "active": bool(r.active),
+        })
+
+    return render_template("teacher_manage_students.html", cls=cls, code=code, students=students)
+
 
 
 @app.route("/teacher/class/<code>")
