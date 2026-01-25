@@ -2318,12 +2318,23 @@ def student_enter():
             if not c_row:
                 return render_template("student_enter.html", error="입장 실패")
 
+            pin = (request.form.get("pin") or "").strip()
+
+            # 6자리 숫자만 허용(아이들 입력 실수 방지)
+            if not (len(pin) == 6 and pin.isdigit()):
+                return render_template("student_enter.html", error="개인 코드는 6자리 숫자여야 합니다.")
+
             with engine.connect() as conn:
                 s_row = conn.execute(text("""
-                    SELECT 1 FROM students
-                    WHERE class_code=:code AND name=:name
+                    SELECT 1
+                    FROM students
+                    WHERE class_code = :code
+                      AND name = :name
+                      AND pin_code = :pin
+                      AND active = TRUE
                     LIMIT 1
-                """), {"code": code, "name": name}).fetchone()
+                """), {"code": code, "name": name, "pin": pin}).fetchone()
+
             if not s_row:
                 return render_template("student_enter.html", error="입장 실패")
 
