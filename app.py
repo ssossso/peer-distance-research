@@ -1306,7 +1306,17 @@ def inject_globals() -> Dict[str, Any]:
 
 
 def build_student_pin_pdf(class_name: str, sid: str, students):
-    """Builds a paged PDF (10 students per page) for student login PIN codes."""
+    """
+    Builds a paged PDF (10 students per page) for student login PIN codes.
+
+    Layout requirements (your spec):
+    - A4 landscape
+    - Top 60%: title + class/sid/date + "학생 로그인 PIN 코드" only (no student codes here)
+    - Bottom 40%: one row containing 10 students per page
+    - No solid outlines / no horizontal lines
+    - Font sizes ~200% (already reflected)
+    - PIN is rotated 90 degrees and has underline to avoid 6/9 confusion
+    """
     buf = BytesIO()
     page_w, page_h = landscape(A4)
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
@@ -1314,9 +1324,11 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
     tz = ZoneInfo("Asia/Seoul")
     date_str = datetime.now(tz).strftime("%Y.%m.%d")
 
+    # Regions
     top_h = page_h * 0.60
     bottom_h = page_h * 0.40
 
+    # Margins
     margin_x = 36
     margin_top = 28
     bottom_y0 = 24
@@ -1335,10 +1347,9 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
         cell_w = x1 - x0
         cell_h = y1 - y0
 
-        # Name (horizontal)
-        c.setFont("Helvetica-Bold", name_fs)
+        # ---- Name (horizontal)
         name_text = (name or "").strip()
-        name_y = y0 + cell_h * 0.70
+        c.setFont("Helvetica-Bold", name_fs)
 
         max_w = cell_w * 0.90
         if stringWidth(name_text, "Helvetica-Bold", name_fs) > max_w:
@@ -1347,10 +1358,12 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
                 fs -= 1
             c.setFont("Helvetica-Bold", fs)
 
+        name_y = y0 + cell_h * 0.70
         c.drawCentredString((x0 + x1) / 2, name_y, name_text)
 
-        # PIN (rotated) + underline to avoid 6/9 confusion
+        # ---- PIN (rotated 90deg) + underline
         pin = (pin_code or "").strip()
+
         cx = (x0 + x1) / 2
         cy = y0 + cell_h * 0.28
 
@@ -1362,54 +1375,79 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
         text_w = stringWidth(pin, "Helvetica-Bold", pin_fs)
         c.drawString(-text_w / 2, 0, pin)
 
+        # underline under rotated PIN (to distinguish 6/9)
         underline_y = -3
         c.setLineWidth(1.5)
         c.line(-text_w / 2, underline_y, text_w / 2, underline_y)
         c.restoreState()
 
-    def draw_page(page_students):
-        # TOP (60%)
+    def draw_header():
+        # Title
         c.setFont("Helvetica-Bold", title_fs)
-        c.drawCentredString(page_w / 2, page_h - margin_top - 10, "<우리반 관계 지도>")
+        c.drawCentredString(page_w / 2, page_h - margin_top - 6, "<우리반 관계 지도>")
 
-        c.setFont("Helvetica-Bold", meta_fs)
-        meta1 = f"{class_name}  |  {sid}회차  |  {date_str}"
-        c.drawCentredString(page_w / 2, page_h - margin_top - 10 - 46, meta1)
+        # Class + SID + Date
+        c.setFont("Helvetica", meta_fs)
+        meta_line = f"{class_name}  |  {sid}회차  |  {date_str}"
+        c.drawCentredString(page_w / 2, page_h - margin_top - 42, meta_line)
 
-        c.setFont("Helvetica", sub_fs)
-        c.drawCentredString(page_w / 2, page_h - margin_top - 10 - 46 - 28, "학생 로그인 PIN 코드")
+        # Sub label
+        c.setFont("Helvetica-Bold", sub_fs)
+        c.drawCentredString(page_w / 2, page_h - margin_top - 70, "학생 로그인 PIN 코드")
 
-        # BOTTOM (40%): one row, 10 columns
-        usable_w = page_w - margin_x * 2
-        col_w = usable_w / 10.0
+    # Defensive cleanup + stable order
+    # students: [{no, name, pin_code}, ...]
+    safe_students = []
+    for s in (students or []):
+        nm = (s.get("name") or "").strip()
+        if not nm:
+            continue
+        safe_students.append({
+            "no": s.get("no"),
+            "name": nm,
+            "pin_code": (s.get("pin_code") or "").strip(),  # <-- KEY FIX: pin_code 고정
+        })
 
-        # Vertical dotted cut guides only (no outlines, no horizontal rules)
-        c.setDash(3, 4)
-        c.setLineWidth(1.2)
-        for i in range(1, 10):
-            x = margin_x + col_w * i
-            c.line(x, bottom_y0, x, bottom_y1)
-        c.setDash()
-
-        for i in range(10):
-            x0 = margin_x + col_w * i
-            x1 = x0 + col_w
-            if i < len(page_students):
-                st = page_students[i]
-                draw_pin_cell(x0, x1, bottom_y0, bottom_y1, st.get("name", ""), st.get("pin_code", ""))
-
-    total = len(students or [])
-    pages = (total + per_page - 1) // per_page if total > 0 else 1
+    # Chunk per page
+    total = len(safe_students)
+    pages = (total + per_page - 1) // per_page
+    if pages == 0:
+        pages = 1
 
     for p in range(pages):
-        chunk = (students or [])[p * per_page:(p + 1) * per_page]
-        draw_page(chunk)
-        if p < pages - 1:
-            c.showPage()
+        draw_header()
+
+        # Bottom row geometry: 10 equal cells
+        x0 = margin_x
+        x1 = page_w - margin_x
+        full_w = x1 - x0
+        cell_w = full_w / per_page
+
+        # Use full bottom region height
+        y0 = bottom_y0
+        y1 = bottom_y1
+
+        start = p * per_page
+        end = min(start + per_page, total)
+        page_items = safe_students[start:end]
+
+        # Draw 10 slots even if less students on last page (empty slots remain blank)
+        for i in range(per_page):
+            left = x0 + i * cell_w
+            right = left + cell_w
+            if i < len(page_items):
+                it = page_items[i]
+                draw_pin_cell(left, right, y0, y1, it["name"], it["pin_code"])
+            else:
+                # Empty slot: intentionally draw nothing (no outlines/lines)
+                pass
+
+        c.showPage()
 
     c.save()
     buf.seek(0)
     return buf
+
 
 @app.route("/debug/db")
 def debug_db():
@@ -2267,6 +2305,8 @@ def class_detail_v2(code):
         session_links=session_links,
         open_panel=open_panel,
     )
+
+
 
 
 # -------------------------
@@ -3633,9 +3673,11 @@ if __name__ == "__main__":
 
 
 def db_get_students_with_pin(class_code: str):
-    """Returns a list of dicts: [{no:int, name:str, pin_code:str}, ...]"""
+    """Returns a list of dicts: [{no:int|None, name:str, pin_code:str}, ...]"""
     if not engine:
         raise RuntimeError("DB engine not initialized")
+
+    class_code = (class_code or "").upper().strip()
 
     with engine.connect() as conn:
         rows = conn.execute(text("""
@@ -3654,3 +3696,4 @@ def db_get_students_with_pin(class_code: str):
             "pin_code": str(r[2] or "").strip(),
         })
     return out
+
