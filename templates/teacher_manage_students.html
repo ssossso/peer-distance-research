@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:980px; text-align:left;">
+  <h2 style="text-align:center; margin:0 0 10px 0;">학생 관리</h2>
+  <div class="muted" style="text-align:center; margin-bottom:14px;">
+    학급: <b>{{ cls.name }}</b> · 코드: <b>{{ code }}</b>
+  </div>
+
+  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa; margin-bottom:12px;">
+    <div style="font-weight:900; margin-bottom:8px;">전입 학생 추가</div>
+    <form method="post" style="display:flex; gap:8px; flex-wrap:wrap;">
+      <input type="hidden" name="action" value="add">
+      <input name="student_no" placeholder="번호(선택)" style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
+      <input name="name" placeholder="이름" style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
+      <select name="gender" style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
+        <option value="">성별(미입력)</option>
+        <option value="M">남</option>
+        <option value="F">여</option>
+      </select>
+      <button type="submit">추가</button>
+    </form>
+    <div class="muted" style="font-size:12px; margin-top:8px;">
+      추가하면 6자리 개인 코드가 자동 발급됩니다.
+    </div>
+  </div>
+
+  <div style="overflow:auto;">
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f6f8ff;">
+          <th style="text-align:left; padding:8px; border-bottom:1px solid #eef1f7;">번호</th>
+          <th style="text-align:left; padding:8px; border-bottom:1px solid #eef1f7;">이름</th>
+          <th style="text-align:left; padding:8px; border-bottom:1px solid #eef1f7;">성별</th>
+          <th style="text-align:left; padding:8px; border-bottom:1px solid #eef1f7;">개인코드(6자리)</th>
+          <th style="text-align:left; padding:8px; border-bottom:1px solid #eef1f7;">재적</th>
+          <th style="text-align:left; padding:8px; border-bottom:1px solid #eef1f7;">관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr>
+          <td style="padding:8px; border-bottom:1px solid #eef1f7;">{{ s.no }}</td>
+          <td style="padding:8px; border-bottom:1px solid #eef1f7;"><b>{{ s.name }}</b></td>
+          <td style="padding:8px; border-bottom:1px solid #eef1f7;">
+            <form method="post" style="display:flex; gap:6px; align-items:center;">
+              <input type="hidden" name="action" value="set_gender">
+              <input type="hidden" name="name" value="{{ s.name }}">
+              <select name="gender" onchange="this.form.submit()"
+                      style="padding:6px 8px; border-radius:10px; border:1px solid #d1d5db;">
+                <option value="" {% if s.gender=="" %}selected{% endif %}>(미입력)</option>
+                <option value="M" {% if s.gender=="M" %}selected{% endif %}>남</option>
+                <option value="F" {% if s.gender=="F" %}selected{% endif %}>여</option>
+              </select>
+            </form>
+          </td>
+          <td style="padding:8px; border-bottom:1px solid #eef1f7; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;">
+            {{ s.pin }}
+          </td>
+          <td style="padding:8px; border-bottom:1px solid #eef1f7;">
+            {% if s.active %}재적{% else %}<span class="muted">전출</span>{% endif %}
+          </td>
+          <td style="padding:8px; border-bottom:1px solid #eef1f7;">
+            <form method="post" style="display:inline-flex; gap:6px; align-items:center;">
+              <input type="hidden" name="action" value="toggle_active">
+              <input type="hidden" name="name" value="{{ s.name }}">
+              {% if s.active %}
+                <input type="hidden" name="set" value="0">
+                <button type="submit">전출 처리</button>
+              {% else %}
+                <input type="hidden" name="set" value="1">
+                <button type="submit">복귀 처리</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; gap:8px; margin-top:12px;">
+    <a class="btn" href="/teacher/class/{{ code }}?sid=1" style="text-align:center;">학급으로 돌아가기</a>
+  </div>
+</div>
+{% endblock %}
