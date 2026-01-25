@@ -1,5 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
+
+<style>
+  /* ===== teacher signup research box responsive ===== */
+  .research-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 600px) {
+    .research-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .radio-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .radio-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    white-space: nowrap;
+  }
+</style>
+
 <div class="card">
   <h2>교사 회원가입</h2>
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
@@ -10,135 +41,79 @@
 
     비밀번호<br>
     <div class="pw-wrap">
-      <input id="pwInput"
-             type="password"
-             name="password"
-             autocomplete="new-password"
-             class="pw-input-in">
-
-      <button id="pwToggleBtn"
-              class="pw-in-toggle"
-              type="button"
-              aria-label="비밀번호 보기/숨기기"
-              aria-pressed="false">
-        <span id="eyeOn" class="eye-icon is-active" aria-hidden="true">
-          <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M256 105c-101.8 0-188.4 62.4-224 151 35.6 88.6 122.2 151 224 151s188.4-62.4 224-151c-35.6-88.6-122.2-151-224-151zm0 251.7c-56 0-101.8-45.3-101.8-100.7S200 155.3 256 155.3 357.8 200.6 357.8 256 312 356.7 256 356.7zm0-161.1c-33.6 0-61.1 27.2-61.1 60.4s27.5 60.4 61.1 60.4 61.1-27.2 61.1-60.4-27.5-60.4-61.1-60.4z"></path>
-          </svg>
-        </span>
-
-        <span id="eyeOff" class="eye-icon" aria-hidden="true">
-          <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M256.1 144.8c56.2 0 101.9 45.3 101.9 101.1 0 13.1-2.6 25.5-7.3 37l59.5 59c30.8-25.5 55-58.4 69.9-96-35.3-88.7-122.3-151.6-224.2-151.6-28.5 0-55.8 5.1-81.1 14.1l44 43.7c11.6-4.6 24.1-7.3 37.3-7.3zM52.4 89.7l46.5 46.1 9.4 9.3c-33.9 26-60.4 60.8-76.3 100.8 35.2 88.7 122.2 151.6 224.1 151.6 31.6 0 61.7-6.1 89.2-17l8.6 8.5 59.7 59 25.9-25.7L78.2 64 52.4 89.7zM165 201.4l31.6 31.3c-1 4.2-1.6 8.7-1.6 13.1 0 33.5 27.3 60.6 61.1 60.6 4.5 0 9-.6 13.2-1.6l31.6 31.3c-13.6 6.7-28.7 10.7-44.8 10.7-56.2 0-101.9-45.3-101.9-101.1 0-15.8 4.1-30.7 10.8-44.3zm87.8-15.7l64.2 63.7.4-3.2c0-33.5-27.3-60.6-61.1-60.6l-3.5.1z"></path>
-          </svg>
-        </span>
-      </button>
-    </div>
-
-    <br>
+      <input id="pwInput" type="password" name="password"
+             autocomplete="new-password" class="pw-input-in">
+      <button id="pwToggleBtn" class="pw-in-toggle" type="button">👁</button>
+    </div><br>
 
     비밀번호 확인<br>
     <div class="pw-wrap">
-      <input id="pw2Input"
-             type="password"
-             name="password2"
-             autocomplete="new-password"
-             class="pw-input-in">
-
-      <button id="pw2ToggleBtn"
-              class="pw-in-toggle"
-              type="button"
-              aria-label="비밀번호 확인 보기/숨기기"
-              aria-pressed="false">
-        <span id="eye2On" class="eye-icon is-active" aria-hidden="true">
-          <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M256 105c-101.8 0-188.4 62.4-224 151 35.6 88.6 122.2 151 224 151s188.4-62.4 224-151c-35.6-88.6-122.2-151-224-151zm0 251.7c-56 0-101.8-45.3-101.8-100.7S200 155.3 256 155.3 357.8 200.6 357.8 256 312 356.7 256 356.7zm0-161.1c-33.6 0-61.1 27.2-61.1 60.4s27.5 60.4 61.1 60.4 61.1-27.2 61.1-60.4-27.5-60.4-61.1-60.4z"></path>
-          </svg>
-        </span>
-
-        <span id="eye2Off" class="eye-icon" aria-hidden="true">
-          <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M256.1 144.8c56.2 0 101.9 45.3 101.9 101.1 0 13.1-2.6 25.5-7.3 37l59.5 59c30.8-25.5 55-58.4 69.9-96-35.3-88.7-122.3-151.6-224.2-151.6-28.5 0-55.8 5.1-81.1 14.1l44 43.7c11.6-4.6 24.1-7.3 37.3-7.3zM52.4 89.7l46.5 46.1 9.4 9.3c-33.9 26-60.4 60.8-76.3 100.8 35.2 88.7 122.2 151.6 224.1 151.6 31.6 0 61.7-6.1 89.2-17l8.6 8.5 59.7 59 25.9-25.7L78.2 64 52.4 89.7zM165 201.4l31.6 31.3c-1 4.2-1.6 8.7-1.6 13.1 0 33.5 27.3 60.6 61.1 60.6 4.5 0 9-.6 13.2-1.6l31.6 31.3c-13.6 6.7-28.7 10.7-44.8 10.7-56.2 0-101.9-45.3-101.9-101.1 0-15.8 4.1-30.7 10.8-44.3zm87.8-15.7l64.2 63.7.4-3.2c0-33.5-27.3-60.6-61.1-60.6l-3.5.1z"></path>
-          </svg>
-        </span>
-      </button>
+      <input id="pw2Input" type="password" name="password2"
+             autocomplete="new-password" class="pw-input-in">
+      <button id="pw2ToggleBtn" class="pw-in-toggle" type="button">👁</button>
     </div>
 
-    <br>
+    <hr style="margin:18px 0; border:none; border-top:1px solid #e5e7eb;">
 
-<!-- =========================================================
-     RESEARCH_ONLY_BEGIN
-     논문 작성용 추가 수집(추후 삭제 예정)
-========================================================= -->
-<hr style="margin:18px 0; border:none; border-top:1px solid #e5e7eb;">
+    <!-- 연구용 정보 전체 박스 -->
+    <div style="border:1px solid #e5e7eb; border-radius:14px;
+                background:#fafafa; padding:14px; margin-bottom:14px;">
 
-<div style="text-align:left; font-size:12px; font-weight:700; color:#6b7280; line-height:1.45; margin-bottom:14px;">
-  이건 소히가 논문에 써 먹으려고 수집하는 정보입니당><<br>
-  실제 논문에서는 다 익명화해서 사용할게욤<br>
-  조촐한 연구에 참여해줘서 고마워요 제가 맛있는 밥 살게욤🍚🍕🍟
-</div>
+      <div style="font-size:12px; font-weight:700; color:#6b7280;
+                  line-height:1.45; margin-bottom:12px;">
+        이건 소히가 논문에 써 먹으려고 수집하는 정보입니당 &gt;&lt;<br>
+        실제 논문에서는 모두 익명화됩니다.<br>
+        연구에 참여해주셔서 정말 감사합니다 💙
+      </div>
 
-<div style="text-align:left; margin-bottom:14px;">
-  <div style="font-weight:800; margin-bottom:8px;">나의 교직경력은?</div>
-  <label style="display:block; margin:6px 0;">
-    <input type="radio" name="teaching_years" value="1-5" required> 1–5년
-  </label>
-  <label style="display:block; margin:6px 0;">
-    <input type="radio" name="teaching_years" value="6-10"> 6–10년
-  </label>
-  <label style="display:block; margin:6px 0;">
-    <input type="radio" name="teaching_years" value="11-15"> 11–15년
-  </label>
-  <label style="display:block; margin:6px 0;">
-    <input type="radio" name="teaching_years" value="16+"> 16년 이상
-  </label>
-</div>
+      <!-- 교직경력 / 담당학년 -->
+      <div class="research-grid">
 
-<div style="text-align:left; margin-bottom:14px;">
-  <div style="font-weight:800; margin-bottom:8px;">현재 담당 학년은?</div>
-  <label style="display:block; margin:6px 0;">
-    <input type="radio" name="current_grade" value="4" required> 4학년
-  </label>
-  <label style="display:block; margin:6px 0;">
-    <input type="radio" name="current_grade" value="5"> 5학년
-  </label>
-  <label style="display:block; margin:6px 0;">
-    <input type="radio" name="current_grade" value="6"> 6학년
-  </label>
-</div>
+        <!-- 교직경력 -->
+        <div style="border:1px solid #e5e7eb; border-radius:12px;
+                    background:#fff; padding:12px;">
+          <div style="font-weight:800; margin-bottom:8px;">나의 교직경력은?</div>
+          <div class="radio-row">
+            <label><input type="radio" name="teaching_years" value="1-5" required>1–5년</label>
+            <label><input type="radio" name="teaching_years" value="6-10">6–10년</label>
+            <label><input type="radio" name="teaching_years" value="11-15">11–15년</label>
+            <label><input type="radio" name="teaching_years" value="16+">16년+</label>
+          </div>
+        </div>
 
-<div style="text-align:left; margin-bottom:14px;">
-  <div style="font-weight:800; margin-bottom:6px;">
-    이름
-    <span style="font-size:12px; font-weight:700; color:#6b7280;">
-      실명, 소히가 나중에 인터뷰할 때 데이터-인터뷰 매칭 용도로만 사용><<br>
-      부담되면 소히가 알 만한 별명도 괜차나!
-    </span>
-  </div>
-  <input name="research_name" autocomplete="name" placeholder="예: 차은우 / 별명" required />
+        <!-- 담당 학년 -->
+        <div style="border:1px solid #e5e7eb; border-radius:12px;
+                    background:#fff; padding:12px;">
+          <div style="font-weight:800; margin-bottom:8px;">현재 담당 학년은?</div>
+          <div class="radio-row">
+            <label><input type="radio" name="current_grade" value="4" required>4학년</label>
+            <label><input type="radio" name="current_grade" value="5">5학년</label>
+            <label><input type="radio" name="current_grade" value="6">6학년</label>
+          </div>
+        </div>
 
-</div>
+      </div>
+    </div>
 
-<div style="text-align:left; margin-bottom:14px;">
-  <div style="font-weight:800; margin-bottom:6px;">
-    학교
-    <span style="font-size:12px; font-weight:700; color:#6b7280;">
-      학교 규모 등 파악 용도
-    </span>
-  </div>
-  <input name="research_school" placeholder="예시: 참샘초" required />
-</div>
+    <!-- 이름 -->
+    <div style="margin-bottom:14px;">
+      <div style="font-weight:800; margin-bottom:6px;">
+        이름
+        <div style="font-size:12px; font-weight:700; color:#6b7280;">
+          인터뷰 매칭용 (실명 또는 별명 가능)
+        </div>
+      </div>
+      <input name="research_name" required>
+    </div>
 
-<div style="text-align:left; font-size:12px; font-weight:700; color:#6b7280; margin-bottom:8px;">
-  감사합니당💙
-</div>
+    <!-- 학교 -->
+    <div style="margin-bottom:14px;">
+      <div style="font-weight:800; margin-bottom:6px;">학교</div>
+      <input name="research_school" required>
+    </div>
 
-<!-- =========================================================
-     RESEARCH_ONLY_END
-========================================================= -->
-
-<button>회원가입</button>
-</form>
+    <button>회원가입</button>
+  </form>
 </div>
 
 {% endblock %}
