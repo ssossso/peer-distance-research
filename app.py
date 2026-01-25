@@ -694,6 +694,18 @@ def db_create_class(teacher_username: str, class_code: str, class_name: str, stu
                 "pin": pin,
             })
 
+def db_get_latest_teacher_run_id(class_code: str, teacher_username: str, sid: str) -> Optional[int]:
+    if not engine:
+        return None
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT id
+            FROM teacher_placement_runs
+            WHERE class_code = :c AND teacher_username = :t AND session_id = :s
+            ORDER BY started_at DESC, id DESC
+            LIMIT 1
+        """), {"c": class_code, "t": teacher_username, "s": sid}).fetchone()
+    return int(row[0]) if row else None
 
 
 def db_delete_class_for_teacher(class_code: str, teacher_username: str) -> bool:
@@ -1469,6 +1481,39 @@ def teacher_login():
 
     return render_template("teacher_login.html")
 
+@app.route("/teacher/class/<class_code>/session/<sid>/resume")
+def teacher_resume_session(class_code: str, sid: str):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    # 1) 해당 teacher/class/sid의 최신 run 찾기 (없으면 생성)
+    run_id = db_get_latest_teacher_run_id(class_code, session["teacher"], sid)
+    if not run_id:
+        run_id = db_create_teacher_run(class_code, session["teacher"], sid, condition="default", tool_run_id=None)
+
+    run = db_get_teacher_run(run_id)
+    if not run:
+        return redirect(f"/teacher/class/{class_code}?sid={sid}")
+
+    # 2) 상태에 따라 이어갈 곳 자동 결정
+    if run.get("submitted"):
+        return redirect(f"/teacher/class/{class_code}?sid={sid}")
+
+    # placements_complete 판단은 teacher_write 라우트에서 쓰는 로직과 동일하게 계산
+    students = db_get_students_in_class(class_code) if engine else []
+    all_names = [s["name"] for s in students]
+    placements = run.get("placements") or {}
+
+    placements_complete = False
+    try:
+        placements_complete = all((n in placements) for n in all_names) and len(all_names) > 0
+    except Exception:
+        placements_complete = False
+
+    if placements_complete:
+        return redirect(f"/teacher/placement/{run_id}/complete")
+
+    return redirect(f"/teacher/placement/{run_id}")
 
 
 
@@ -2709,7 +2754,7 @@ def teacher_placement_complete(run_id: int):
     if not run or run["teacher_username"] != session["teacher"]:
         return "접근 권한이 없습니다.", 403
 
-    # 완료 화면에서 자동완성 목록 제공용
+    # 완료 화면에서 학생 목록 제공용
     students = db_get_students_in_class(run["class_code"]) if engine else []
 
     if request.method == "POST":
@@ -2728,7 +2773,7 @@ def teacher_placement_complete(run_id: int):
             confidence_score = 50
         confidence_score = max(0, min(100, confidence_score))
 
-        # 우선순위는 hidden input(priority_1~3)에 실려 옴
+        # 우선순위(hidden input: priority_1~3)
         decisions: List[Dict[str, Any]] = []
         for rank in [1, 2, 3]:
             nm = (request.form.get(f"priority_{rank}") or "").strip()
@@ -2740,9 +2785,7 @@ def teacher_placement_complete(run_id: int):
 
         return redirect(f"/teacher/class/{run['class_code']}?sid={run['session_id']}")
 
-
     return render_template("teacher_complete.html", run=run, students=students)
-
 
 
 # -------------------------
