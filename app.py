@@ -766,13 +766,22 @@ def db_get_students_in_class(class_code: str) -> List[Dict[str, str]]:
         raise RuntimeError("DB engine not initialized")
 
     with engine.connect() as conn:
-rows = conn.execute(text("""
-    SELECT student_no, name
-    FROM students
-    WHERE class_code = :code
-      AND active = TRUE
-    ORDER BY id ASC
-"""), {"code": class_code}).fetchall()
+        rows = conn.execute(text("""
+            SELECT student_no, name
+            FROM students
+            WHERE class_code = :code
+              AND active = TRUE
+            ORDER BY id ASC
+        """), {"code": class_code}).fetchall()
+
+    out: List[Dict[str, str]] = []
+    for r in rows:
+        out.append({
+            "no": r.student_no or "",
+            "name": r.name
+        })
+    return out
+
 
 
     out: List[Dict[str, str]] = []
