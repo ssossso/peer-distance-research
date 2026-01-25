@@ -3,13 +3,22 @@
 <div class="card" style="max-width:860px; text-align:left;">
   <h2 style="margin:0 0 10px 0; text-align:center;">교사 배치 기록 (마무리)</h2>
 
-  <div class="muted" style="text-align:center; margin-bottom:14px;">
-    <b>{{ run.teacher_username }}</b> · {{ run.session_id }}차 · 학급코드 <b>{{ run.class_code }}</b>
+  <div class="subtitle" style="margin-bottom:12px;">
+    소히가 논문에 써먹을 수도 있는 거>< 대충 부담 없이 답 해주세요🙂 진짜 고마워요💙
   </div>
 
-  <div class="subtitle" style="margin-bottom:12px;">
-    아래 항목은 연구 분석을 위한 보조 기록입니다. 정답/평가가 아니며, 교사의 관찰을 정리하기 위한 메모 성격입니다.
-  </div>
+  <form method="post" id="completeForm">
+    <input type="hidden" name="duration_ms" id="duration_ms" value="0">
+
+    <div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa; margin-bottom:12px;">
+      <div style="font-weight:800; margin-bottom:8px;">확신도</div>
+
+      <input type="range" name="confidence_score" min="0" max="100" value="50"
+             style="width:100%;">
+
+      <!-- 숫자/예시 문구는 요청대로 제거 -->
+    </div>
+
 
   <form method="post" id="completeForm">
     <input type="hidden" name="duration_ms" id="duration_ms" value="0">
