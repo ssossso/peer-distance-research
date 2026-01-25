@@ -2699,17 +2699,21 @@ def teacher_placement_complete(run_id: int):
 
     if request.method == "POST":
         duration_ms_raw = request.form.get("duration_ms") or "0"
-        confidence_raw = request.form.get("confidence_score") or "0"
+        confidence_raw = (request.form.get("confidence_score") or "").strip()
 
         try:
             duration_ms = int(duration_ms_raw)
         except Exception:
             duration_ms = 0
-        try:
-            confidence_score = int(confidence_raw)
-        except Exception:
-            confidence_score = 0
 
+        # 슬라이더: 0~100 int (범위 밖이면 자동 보정)
+        try:
+            confidence_score = int(confidence_raw) if confidence_raw != "" else 50
+        except Exception:
+            confidence_score = 50
+        confidence_score = max(0, min(100, confidence_score))
+
+        # 우선순위는 hidden input(priority_1~3)에 실려 옴
         decisions: List[Dict[str, Any]] = []
         for rank in [1, 2, 3]:
             nm = (request.form.get(f"priority_{rank}") or "").strip()
@@ -2720,6 +2724,7 @@ def teacher_placement_complete(run_id: int):
         db_complete_teacher_run(run_id, duration_ms=duration_ms, confidence_score=confidence_score)
 
         return redirect(f"/teacher/class/{run['class_code']}?sid={run['session_id']}")
+
 
     return render_template("teacher_complete.html", run=run, students=students)
 
