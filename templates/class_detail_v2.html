@@ -274,70 +274,73 @@
         </div>
       </div>
 
-      {# --------------- 학생 인식 배치 --------------- #}
-      <div class="content-box" data-step-box="student_map">
-        <div class="section-title">학생 인식 배치</div>
-        <div class="subtitle" style="margin-bottom:10px;">
-          아래 QR을 학생들에게 보여주거나 배포해 주세요. 학생들은 각자 기기에서 조사에 참여합니다.
-        </div>
+{# --------------- 학생 인식 배치 --------------- #}
+<div class="content-box" data-step-box="student_map">
+  <div class="section-title">학생 인식 배치</div>
+  <div class="subtitle" style="margin-bottom:10px;">
+    아래 QR을 학생들에게 보여주거나 배포해 주세요. 학생들은 각자 기기에서 조사에 참여합니다.
+  </div>
 
-        <div class="two-col">
-          {% set qr_src = '/qr/' ~ code ~ '/' ~ sid ~ '.png' %}
-          <div class="qr-box">
-            <div style="font-weight:950; margin-bottom:6px;">{{ sid }}차 QR</div>
-            <img
-              src="{{ qr_src }}"
-              alt="{{ sid }}차 QR"
-              style="width:140px; height:140px; border-radius:10px; border:1px solid #eef2f7; display:block; margin:0 auto;"
-              loading="lazy"
-            />
-            <div class="qr-actions">
-              <button type="button" class="icon-btn" title="크게 보기" onclick="openQrNewWindowOnly('{{ qr_src }}')">🔎</button>
-              <button type="button" class="icon-btn" title="다운로드" onclick="downloadQrPng('{{ qr_src }}', '{{ sid }}차')">📂</button>
-            </div>
-            <div class="small" style="margin-top:8px;">
-              돋보기를 클릭해도 QR코드가 크게 안 뜨면,<br> 팝업 차단을 확인해 주세요.
-            </div>
-          </div>
+  <div class="two-col">
+    {% set qr_src = '/qr/' ~ code ~ '/' ~ sid ~ '.png' %}
+    <div class="qr-box">
+      <div style="font-weight:950; margin-bottom:6px;">{{ sid }}차 QR</div>
+      <img
+        src="{{ qr_src }}"
+        alt="{{ sid }}차 QR"
+        style="width:140px; height:140px; border-radius:10px; border:1px solid #eef2f7; display:block; margin:0 auto;"
+        loading="lazy"
+      />
+      <div class="qr-actions">
+        <button type="button" class="icon-btn" title="크게 보기" onclick="openQrNewWindowOnly('{{ qr_src }}')">🔎</button>
+        <button type="button" class="icon-btn" title="다운로드" onclick="downloadQrPng('{{ qr_src }}', '{{ sid }}차')">📂</button>
+      </div>
+      <div class="small" style="margin-top:8px;">
+        돋보기를 클릭해도 QR코드가 크게 안 뜨면,<br> 팝업 차단을 확인해 주세요.
+      </div>
+    </div>
 
-          <div class="student-list">
-            <div style="font-weight:950; margin-bottom:8px;">학생 참여 현황</div>
-            <div class="small" style="margin-bottom:10px;">
-              화살표(↗)를 누르면 해당 학생 결과 화면으로 이동합니다.
-            </div>
+    <div class="student-list">
+      <div style="font-weight:950; margin-bottom:8px;">학생 참여 현황</div>
+      <div class="small" style="margin-bottom:10px;">화살표(↗)를 누르면 해당 학생 결과 화면으로 이동합니다.</div>
 
-            {% for r in rows %}
-              <div class="student-item">
-                <div class="student-name">
-                  <span class="no">{{ r.no }}</span> {{ r.name }}
-                </div>
-                <div class="student-actions">
-                  <a class="goto-btn"
-                     href="/teacher/class/{{ code }}/result/{{ sid }}/{{ r.url_name }}"
-                     title="학생 결과 보기">↗</a>
-                  <span class="status {% if r.status=='완료' %}done{% else %}todo{% endif %}">
-                    {{ r.status }}
-                  </span>
-                </div>
-              </div>
-            {% endfor %}
+      {% for r in rows %}
+        <div class="student-item">
+          <div class="student-name"><span class="no">{{ r.no }}</span> {{ r.name }}</div>
+          <div class="student-actions">
+            <a class="goto-btn" href="/teacher/class/{{ code }}/result/{{ sid }}/{{ r.url_name }}" title="학생 결과 보기">↗</a>
+            <span class="status {% if r.status=='완료' %}done{% else %}todo{% endif %}">{{ r.status }}</span>
           </div>
         </div>
+      {% endfor %}
 
-        <div class="btn-row" style="justify-content:flex-end; margin-top:12px;">
-          <a
-            class="pill action-btn dl-pill"
-            href="/teacher/class/{{ code }}/student_pin_pdf?sid={{ sid }}"
-            style="text-decoration:none;"
-            title="학생 로그인 PIN PDF 다운로드"
+      {# 다운로드 버튼: 학생 안내 박스 맨 하단(오른쪽 정렬) #}
+      <div class="btn-row" style="justify-content:flex-end; margin-top:12px;">
+        <a
+          class="pill action-btn dl-pill"
+          href="/teacher/class/{{ code }}/student_pin_pdf?sid={{ sid }}"
+          style="text-decoration:none;"
+          title="학생 로그인 PIN PDF 다운로드"
+        >
+          학생_로그인_PIN.pdf
+          <svg
+            stroke="currentColor"
+            fill="currentColor"
+            stroke-width="0"
+            viewBox="0 0 512 512"
+            xmlns="http://www.w3.org/2000/svg"
+            style="width:18px; height:18px; display:block;"
+            aria-hidden="true"
+            focusable="false"
           >
-            학생_로그인_PIN.pdf
-            <svg stroke="currentColor" fill="currentColor" stroke-width="0"
-                 viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-              <path d="M416 199.5h-91.4V64H187.4v135.5H96l160 158.1 160-158.1zM96 402.8V448h320v-45.2H96z"></path>
-            </svg>
-          </a>
-        </div>
+            <path d="M416 199.5h-91.4V64H187.4v135.5H96l160 158.1 160-158.1zM96 402.8V448h320v-45.2H96z"></path>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
 
         {# ---- 깔끔한 다운로드 바: 학생 안내 박스 맨 하단 ---- #}
         <div class="dl-row">
