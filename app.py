@@ -1169,7 +1169,7 @@ def db_update_teacher_run_placements(run_id: int, placements: Dict[str, Any]) ->
 
 
 
-def db_complete_teacher_run(run_id: int, duration_ms: int, confidence_score: int) -> None:
+def db_complete_teacher_run(run_id: int, confidence_score: int) -> None:
     if not engine:
         raise RuntimeError("DB engine not initialized")
 
@@ -1177,11 +1177,13 @@ def db_complete_teacher_run(run_id: int, duration_ms: int, confidence_score: int
         conn.execute(text("""
             UPDATE teacher_placement_runs
             SET ended_at = NOW(),
-                duration_ms = :duration_ms,
                 confidence_score = :confidence_score,
                 submitted = TRUE
             WHERE id = :id
-        """), {"duration_ms": int(duration_ms), "confidence_score": int(confidence_score), "id": run_id})
+        """), {
+            "confidence_score": int(confidence_score),
+            "id": run_id
+        })
 
 
 def db_replace_teacher_decisions(run_id: int, decisions: List[Dict[str, Any]]) -> None:
@@ -2758,13 +2760,9 @@ def teacher_placement_complete(run_id: int):
     students = db_get_students_in_class(run["class_code"]) if engine else []
 
     if request.method == "POST":
-        duration_ms_raw = request.form.get("duration_ms") or "0"
+        duration_ms = 0  # duration은 수집/분석하지 않음
         confidence_raw = (request.form.get("confidence_score") or "").strip()
 
-        try:
-            duration_ms = int(duration_ms_raw)
-        except Exception:
-            duration_ms = 0
 
         # 슬라이더: 0~100 int (범위 밖이면 자동 보정)
         try:
@@ -2781,7 +2779,7 @@ def teacher_placement_complete(run_id: int):
                 decisions.append({"name": nm, "rank": rank})
 
         db_replace_teacher_decisions(run_id, decisions)
-        db_complete_teacher_run(run_id, duration_ms=duration_ms, confidence_score=confidence_score)
+        db_complete_teacher_run(run_id, confidence_score=confidence_score)
 
         return redirect(f"/teacher/class/{run['class_code']}?sid={run['session_id']}")
 
