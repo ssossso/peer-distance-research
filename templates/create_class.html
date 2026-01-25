@@ -26,6 +26,7 @@
             <tr>
               <th style="width:90px;">번호</th>
               <th>이름</th>
+              <th style="width:120px;">성별(선택)</th>
             </tr>
           </thead>
           <tbody id="studentGridBody">
@@ -76,9 +77,21 @@
       nm.placeholder = '예: 홍길동';
       tdName.appendChild(nm);
 
+      const tdGender = document.createElement('td');
+      const g = document.createElement('select');
+      g.className = 'grid-input';
+      g.innerHTML = `
+        <option value="">(미입력)</option>
+        <option value="M">남</option>
+        <option value="F">여</option>
+      `;
+      tdGender.appendChild(g);
+
       tr.appendChild(tdNo);
       tr.appendChild(tdName);
+      tr.appendChild(tdGender);
       return tr;
+
     }
 
     function initRows(n){
@@ -90,14 +103,21 @@
       const rows = body.querySelectorAll('tr');
       rows.forEach((r, idx) => {
         const inputs = r.querySelectorAll('input');
+        const selects = r.querySelectorAll('select');
+
         const noInput = inputs[0];
         const nameInput = inputs[1];
+        const genderSel = selects[0];
+
         const name = (nameInput?.value || '').trim();
-        if(!name) return; // 이름이 없으면 제외
+        if(!name) return;
 
         let no = (noInput?.value || '').trim();
         if(!no) no = String(idx + 1);
 
+        const gender = (genderSel?.value || '').trim(); // "M" | "F" | ""
+        // 형식: 번호 \t 이름 \t 성별
+        lines.push(`${no}\t${name}\t${gender}`);
         // 백엔드 파서가 탭/콤마를 처리하므로 탭으로 통일
         lines.push(`${no}\t${name}`);
       });
