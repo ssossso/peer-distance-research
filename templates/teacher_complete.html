@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card" style="max-width:860px; text-align:left;">
+<div class="card" style="max-width:900px; text-align:left;">
   <h2 style="margin:0 0 10px 0; text-align:center;">교사 배치 기록 (마무리)</h2>
 
   <div class="subtitle" style="margin-bottom:12px;">
@@ -10,13 +10,11 @@
   <form method="post" id="completeForm">
     <input type="hidden" name="duration_ms" id="duration_ms" value="0">
 
+    <!-- 확신도: 슬라이더(0~100 int 저장) -->
     <div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa; margin-bottom:12px;">
       <div style="font-weight:800; margin-bottom:8px;">확신도</div>
-
-      <input type="range" name="confidence_score" min="0" max="100" value="50"
-             style="width:100%;">
+      <input type="range" name="confidence_score" min="0" max="100" value="50" style="width:100%;">
     </div>
-
 
     <!-- 우선순위 제출용 hidden input -->
     <input type="hidden" name="priority_1" id="priority_1" value="">
@@ -26,15 +24,16 @@
     <div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa; margin-bottom:12px;">
       <div style="font-weight:900; margin-bottom:8px;">생활지도 개입 우선순위(1~3순위, 건너뛰기 가능)</div>
 
-      <!-- “교사 결과 화면” 느낌: 현재 배치 결과를 읽기 전용으로 보여줌 -->
+      <!-- 교사 배치 결과 미리보기(읽기 전용) -->
       <div style="border:1px solid #d1d5db; border-radius:12px; background:#fff; overflow:hidden; margin-bottom:10px;">
-        <div id="previewCanvas" style="position:relative; height:260px;"></div>
+        <div id="previewCanvas" style="position:relative; height:280px;"></div>
       </div>
 
-      <div style="display:grid; grid-template-columns: 1fr 320px; gap:12px; align-items:start;">
+      <div style="display:grid; grid-template-columns: 1fr 340px; gap:12px; align-items:start;">
         <!-- 왼쪽: 학생 선택 목록 -->
         <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:10px;">
           <div style="font-weight:800; margin-bottom:8px;">학생 선택(최대 3명)</div>
+
           <div id="studentPickList"
                style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start;">
             {% for s in students %}
@@ -45,12 +44,13 @@
               </button>
             {% endfor %}
           </div>
+
           <div class="muted" style="font-size:12px; margin-top:8px;">
             선택하면 오른쪽 박스에 1~3순위로 들어가며, 순서는 위/아래로 바꿀 수 있습니다.
           </div>
         </div>
 
-        <!-- 오른쪽: 선택 결과 + 순서 변경 -->
+        <!-- 오른쪽: 선택 결과 + 순서 변경 + 저장/건너뛰기 -->
         <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:10px;">
           <div style="font-weight:800; margin-bottom:8px;">선택된 학생</div>
 
@@ -67,20 +67,13 @@
         </div>
       </div>
     </div>
-
-
-    <div style="display:flex; gap:8px;">
-      <button type="submit" style="flex:1;">기록 저장 및 종료</button>
-      <a class="btn" href="/teacher/class/{{ run.class_code }}?sid={{ run.session_id }}"
-         style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
-        돌아가기
-      </a>
-    </div>
   </form>
 </div>
 
 <script>
-  // 페이지 진입 시점부터 제출까지 시간 측정
+  // -------------------------
+  // 시간 측정
+  // -------------------------
   const startedAt = Date.now();
   document.getElementById('completeForm').addEventListener('submit', () => {
     const ms = Math.max(0, Date.now() - startedAt);
@@ -109,6 +102,16 @@
 
   function renderSelected(){
     selectedBox.innerHTML = "";
+
+    if (selected.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'muted';
+      empty.style.fontSize = '13px';
+      empty.textContent = '아직 선택된 학생이 없습니다. (선택하지 않아도 됩니다)';
+      selectedBox.appendChild(empty);
+      return;
+    }
+
     selected.forEach((name, idx) => {
       const row = document.createElement('div');
       row.style.display = 'flex';
@@ -150,6 +153,7 @@
         selected[idx] = tmp;
         renderSelected();
         syncHidden();
+        highlightSelectedDots();
       });
 
       down.addEventListener('click', () => {
@@ -159,6 +163,7 @@
         selected[idx] = tmp;
         renderSelected();
         syncHidden();
+        highlightSelectedDots();
       });
 
       remove.addEventListener('click', () => {
@@ -166,6 +171,8 @@
         if (pos >= 0) selected.splice(pos, 1);
         renderSelected();
         syncHidden();
+        updatePickButtons();
+        highlightSelectedDots();
       });
 
       right.appendChild(up);
@@ -176,14 +183,17 @@
       row.appendChild(right);
       selectedBox.appendChild(row);
     });
+  }
 
-    if (selected.length === 0){
-      const empty = document.createElement('div');
-      empty.className = 'muted';
-      empty.style.fontSize = '13px';
-      empty.textContent = '아직 선택된 학생이 없습니다. (선택하지 않아도 됩니다)';
-      selectedBox.appendChild(empty);
-    }
+  function updatePickButtons(){
+    document.querySelectorAll('.pickBtn').forEach(btn => {
+      const nm = btn.dataset.name;
+      if (!nm) return;
+
+      const picked = selected.includes(nm);
+      btn.style.opacity = picked ? '0.6' : '1';
+      btn.style.borderColor = picked ? '#111827' : '#d1d5db';
+    });
   }
 
   document.querySelectorAll('.pickBtn').forEach(btn => {
@@ -192,31 +202,24 @@
       if (!nm) return;
 
       if (selected.includes(nm)){
-        // 이미 선택된 경우: 제거(토글)
+        // 토글 해제
         const pos = selected.indexOf(nm);
         selected.splice(pos, 1);
-        btn.style.opacity = '1';
-        btn.style.borderColor = '#d1d5db';
       } else {
         // 새 선택
-        if (selected.length >= 3) return; // 최대 3명
+        if (selected.length >= 3) return;
         selected.push(nm);
-        btn.style.opacity = '0.6';
-        btn.style.borderColor = '#111827';
       }
 
       renderSelected();
       syncHidden();
+      updatePickButtons();
+      highlightSelectedDots();
     });
   });
 
-  // 초기 렌더
-  renderSelected();
-  syncHidden();
-
   // -------------------------
   // 교사 배치 결과 미리보기(읽기 전용)
-  // - teacher_write의 배치 저장 스키마(abs)를 간단히 재현
   // -------------------------
   const placements = {{ (run.placements or {})|tojson }};
   const preview = document.getElementById('previewCanvas');
@@ -224,7 +227,7 @@
   function makeDot(name){
     const el = document.createElement('div');
     el.textContent = name;
-    el.dataset.name = name; // ✅ 어떤 학생 점인지 표시
+    el.dataset.name = name;
 
     el.style.position = 'absolute';
     el.style.transform = 'translate(-50%, -50%)';
@@ -239,7 +242,6 @@
 
     return el;
   }
-
 
   function renderPreview(){
     preview.innerHTML = "";
@@ -267,12 +269,10 @@
       preview.appendChild(dot);
     });
 
-    // ✅ 미리보기 그린 뒤, 현재 선택 상태를 반영해서 강조
     highlightSelectedDots();
   }
 
   function highlightSelectedDots(){
-    // previewCanvas 안의 모든 점을 순회하면서 선택된 학생이면 강조
     const dots = preview.querySelectorAll('[data-name]');
     dots.forEach(dot => {
       const nm = dot.dataset.name;
@@ -290,10 +290,13 @@
     });
   }
 
-  
+  // 초기 렌더
+  renderSelected();
+  syncHidden();
+  updatePickButtons();
+
   // 레이아웃이 잡힌 뒤 그리기
   setTimeout(renderPreview, 0);
   window.addEventListener('resize', () => renderPreview());
 </script>
-
 {% endblock %}
