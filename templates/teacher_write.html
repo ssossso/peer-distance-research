@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card" style="max-width:980px; text-align:left;">
   <h2 style="margin:0 0 6px 0; text-align:center;">
-    {{"선생님이 본 우리 반" }}
+    {{ "선생님이 본 우리 반" }}
   </h2>
 
   <p style="margin:0 0 14px 0; text-align:center;">
@@ -17,7 +17,6 @@
   {% else %}
     <span class="muted" style="margin-left:8px;">작성 중</span>
   {% endif %}
-
   </p>
 
   <div class="subtitle" style="text-align:left; margin-bottom:12px;">
@@ -31,14 +30,28 @@
     <div class="error">{{ error }}</div>
   {% endif %}
 
+  <!--
+    한 페이지 통합:
+    - 배치 저장(기존): /teacher/placement/{{ run.id }}  (현재 라우트)
+    - 기록 마무리 저장(기존 complete 라우트 유지): /teacher/placement/{{ run.id }}/complete
+    아래 form은 기본 action을 현재 페이지로 두고, "기록 저장" 클릭 시 JS에서 action을 complete로 변경합니다.
+  -->
   <form method="post" id="measureForm" onsubmit="return onSubmitMeasure();">
     <input type="hidden" name="placements_json" id="placements_json" value="">
+
+    <!-- 마무리 단계 입력(complete 라우트에 전송) -->
+    <input type="hidden" name="confidence_score" id="confidence_score" value="50">
+    <input type="hidden" name="priority_1" id="priority_1" value="">
+    <input type="hidden" name="priority_2" id="priority_2" value="">
+    <input type="hidden" name="priority_3" id="priority_3" value="">
 
     <div style="display:grid; grid-template-columns: 1fr 260px; gap:12px; align-items:start;">
       <!-- 캔버스 -->
       <div>
-        <div id="canvas" style="position:relative; height:clamp(360px, 62vh, 520px); border:1px solid #d1d5db; border-radius:12px; background:#fff; overflow:hidden; touch-action:none;">
-          <!-- 관찰 기준점(중심점) 제거: 교사는 관계망의 일부가 아님 -->
+        <div id="canvas"
+             style="position:relative; height:clamp(360px, 62vh, 520px);
+                    border:1px solid #d1d5db; border-radius:12px;
+                    background:#fff; overflow:hidden; touch-action:none;">
         </div>
 
         <div class="muted" style="margin-top:8px; font-size:12px;">
@@ -47,43 +60,110 @@
         </div>
       </div>
 
-      <!-- 학생 목록 -->
-      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd; height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
-        <div style="font-weight:800; margin-bottom:10px;">학생 목록</div>
+      <!-- 오른쪽 패널: (A) 학생 목록 / (B) 교사 관계 인식(마무리) -->
+      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd;
+                  height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
 
-        <div id="friendList" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start; flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable;">
-          {% for f in friends %}
-            <div class="chip" data-name="{{ f }}"
-                 style="user-select:none; cursor:grab; padding:8px 6px;
-                        border-radius:10px; border:1px solid #d1d5db;
-                        background:#ffffff;
-                        font-weight:600;
-                        font-size:12.5px;
-                        font-family:sans-serif;
-                        text-align:center; touch-action:none;">
-              {{ f }}
+        <!-- (A) 학생 목록 패널 -->
+        <div id="panel_list" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+          <div style="font-weight:800; margin-bottom:10px;">학생 목록</div>
+
+          <div id="friendList"
+               style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px;
+                      align-content:start; flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable;">
+            {% for f in friends %}
+              <div class="chip" data-name="{{ f }}"
+                   style="user-select:none; cursor:grab; padding:8px 6px;
+                          border-radius:10px; border:1px solid #d1d5db;
+                          background:#ffffff; font-weight:600;
+                          font-size:12.5px; font-family:sans-serif;
+                          text-align:center; touch-action:none;">
+                {{ f }}
+              </div>
+            {% endfor %}
+          </div>
+
+          <hr style="border:none; border-top:1px solid #e5e7eb; margin:12px 0;">
+
+          <div style="display:flex; gap:8px;">
+            {% if run.submitted %}
+              <button type="button" disabled style="flex:1; opacity:0.6;">마무리 완료</button>
+
+            {% elif readonly %}
+              <!-- readonly(배치 저장됨) 상태: 버튼 2개 -->
+              <button type="button" class="btn" id="btnNextStep"
+                      style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+                다음 단계
+              </button>
+              <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
+                 style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+                배치 수정
+              </a>
+
+            {% else %}
+              <button type="submit" style="flex:1;">배치 저장</button>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- (B) 교사 관계 인식(마무리) 패널 -->
+        <div id="panel_perception" style="display:none; flex-direction:column; flex:1; min-height:0;">
+          <div style="font-weight:900; margin-bottom:6px;">교사 관계 인식</div>
+          <div class="muted" style="font-size:12px; line-height:1.4; margin-bottom:12px;">
+            소히가 논문에 써먹을 수도 있는 거>< 대충 부담 없이 답 해주세요🙂 진짜 고마워요💙
+          </div>
+
+          <!-- 확신도 -->
+          <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:10px; margin-bottom:10px;">
+            <div style="font-weight:800; margin-bottom:8px;">확신도</div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#6b7280; margin:0 2px 6px 2px;">
+              <span>0</span><span>100</span>
             </div>
-          {% endfor %}
+            <input id="confidence_slider" type="range" min="0" max="100" value="50" style="width:100%;">
+          </div>
+
+          <!-- 깃발(우선순위) -->
+          <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:10px; margin-bottom:10px;">
+            <div style="font-weight:800; margin-bottom:8px;">생활지도 개입 우선순위</div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+              <button type="button" class="rankBtn" data-rank="1"
+                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
+                             font-weight:750; font-size:12.5px; cursor:pointer;">
+                1위
+              </button>
+              <button type="button" class="rankBtn" data-rank="2"
+                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
+                             font-weight:750; font-size:12.5px; cursor:pointer;">
+                2위
+              </button>
+              <button type="button" class="rankBtn" data-rank="3"
+                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
+                             font-weight:750; font-size:12.5px; cursor:pointer;">
+                3위
+              </button>
+              <button type="button" id="rankClear"
+                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
+                             font-weight:650; font-size:12.5px; cursor:pointer;">
+                해제
+              </button>
+            </div>
+
+            <div class="muted" style="font-size:12px; line-height:1.45;">
+              깃발을 선택한 뒤, 왼쪽 배치 결과에서 학생 이름을 클릭하면 해당 학생 위에 깃발이 표시됩니다.
+            </div>
+          </div>
+
+          <!-- 저장 -->
+          <div style="display:flex; gap:8px; margin-top:auto;">
+            <button type="button" class="btn" id="btnBack"
+                    style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+              돌아가기
+            </button>
+            <button type="submit" id="btnSavePerception" style="flex:1;">기록 저장</button>
+          </div>
         </div>
 
-        <hr style="border:none; border-top:1px solid #e5e7eb; margin:12px 0;">
-
-        <div style="display:flex; gap:8px;">
-          {% if run.submitted %}
-            <button type="button" disabled style="flex:1; opacity:0.6;">마무리 완료</button>
-          {% elif readonly %}
-            <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
-               style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
-              배치 수정
-            </a>
-            <a class="btn" href="/teacher/placement/{{ run.id }}/complete"
-               style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
-              다음 단계
-            </a>
-          {% else %}
-            <button type="submit" style="flex:1;">배치 저장</button>
-          {% endif %}
-        </div>
       </div>
     </div>
   </form>
@@ -97,6 +177,24 @@
     transition: none !important;
   }
   .chip:active, .token:active { transform: none !important; }
+
+  /* 마무리 단계에서 클릭 가능한 토큰 느낌 */
+  .token.clickable { cursor: pointer !important; }
+  .token .flag {
+    position:absolute;
+    left:50%;
+    top:-12px;
+    transform:translate(-50%, -100%);
+    font-size:11px;
+    font-weight:850;
+    padding:2px 6px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.95);
+    border:1px solid #d1d5db;
+    display:none;
+    pointer-events:none;
+    white-space:nowrap;
+  }
 </style>
 
 <script>
@@ -108,8 +206,53 @@
   const friendList = document.getElementById('friendList');
   const placementsInput = document.getElementById('placements_json');
 
+  const panelList = document.getElementById('panel_list');
+  const panelPerception = document.getElementById('panel_perception');
+  const btnNextStep = document.getElementById('btnNextStep');
+  const btnBack = document.getElementById('btnBack');
+  const btnSavePerception = document.getElementById('btnSavePerception');
+
+  const confidenceSlider = document.getElementById('confidence_slider');
+  const confidenceHidden = document.getElementById('confidence_score');
+
+  const h1 = document.getElementById('priority_1');
+  const h2 = document.getElementById('priority_2');
+  const h3 = document.getElementById('priority_3');
+
   function clamp(v, min, max){ return Math.min(Math.max(v, min), max); }
   const EDGE_MARGIN = 6;
+
+  // 마무리 단계 상태
+  let PERCEPTION_STEP = false;
+
+  // 우선순위(깃발): 각 순위는 한 명만
+  const ranks = {1: null, 2: null, 3: null}; // 학생 이름
+  let activeRank = null;
+
+  function syncHidden(){
+    h1.value = ranks[1] || "";
+    h2.value = ranks[2] || "";
+    h3.value = ranks[3] || "";
+    confidenceHidden.value = String(Number(confidenceSlider?.value ?? 50));
+  }
+
+  function setActiveRank(r){
+    activeRank = r;
+    document.querySelectorAll('.rankBtn').forEach(btn => {
+      const rr = Number(btn.dataset.rank);
+      const on = (rr === activeRank);
+      btn.style.borderColor = on ? '#111827' : '#d1d5db';
+      btn.style.boxShadow = on ? '0 0 0 3px rgba(17, 24, 39, 0.10)' : 'none';
+      btn.style.background = on ? '#f9fafb' : '#ffffff';
+    });
+  }
+
+  document.querySelectorAll('.rankBtn').forEach(btn => {
+    btn.addEventListener('click', () => setActiveRank(Number(btn.dataset.rank)));
+  });
+  document.getElementById('rankClear')?.addEventListener('click', () => setActiveRank(null));
+
+  confidenceSlider?.addEventListener('input', () => syncHidden());
 
   function makeToken(name){
     const el = document.createElement('div');
@@ -128,9 +271,33 @@
     el.style.userSelect = 'none';
     el.style.cursor = 'grab';
 
-    el.textContent = name;
+    // 깃발(마무리 단계 표시용)
+    const flag = document.createElement('div');
+    flag.className = 'flag';
+    el.appendChild(flag);
+
+    // 텍스트
+    const txt = document.createElement('div');
+    txt.textContent = name;
+    el.appendChild(txt);
 
     if (!READONLY) attachDrag(el);
+
+    // 마무리 단계에서만 클릭으로 순위 지정
+    el.addEventListener('click', () => {
+      if (!PERCEPTION_STEP) return;
+      if (!activeRank) return;
+
+      const nm = el.dataset.name;
+
+      // 토글: 같은 학생이면 해제
+      if (ranks[activeRank] === nm) ranks[activeRank] = null;
+      else ranks[activeRank] = nm;
+
+      syncHidden();
+      refreshFlags();
+    });
+
     return el;
   }
 
@@ -217,6 +384,17 @@
   }
 
   function onSubmitMeasure(){
+    // 마무리 단계에서 "기록 저장"을 누른 경우:
+    if (PERCEPTION_STEP){
+      // complete 라우트로 전송
+      const form = document.getElementById('measureForm');
+      form.action = "/teacher/placement/{{ run.id }}/complete";
+      syncHidden();
+      syncPlacements();
+      return true;
+    }
+
+    // 일반 배치 저장(기존)
     if (READONLY) return false;
 
     const p = syncPlacements();
@@ -230,6 +408,51 @@
     return confirm('배치를 저장하고 다음 단계(확신도/우선순위 입력)로 이동할까요?');
   }
 
+  function refreshFlags(){
+    const tokens = canvas.querySelectorAll('.token');
+    tokens.forEach(t => {
+      const nm = t.dataset.name;
+      const flag = t.querySelector('.flag');
+      if (!flag) return;
+
+      let r = null;
+      if (ranks[1] === nm) r = 1;
+      else if (ranks[2] === nm) r = 2;
+      else if (ranks[3] === nm) r = 3;
+
+      if (r){
+        flag.style.display = 'block';
+        flag.textContent = r + '위';
+        flag.style.borderColor = '#111827';
+      } else {
+        flag.style.display = 'none';
+        flag.textContent = '';
+        flag.style.borderColor = '#d1d5db';
+      }
+    });
+  }
+
+  function setPerceptionMode(on){
+    PERCEPTION_STEP = on;
+
+    if (on){
+      panelList.style.display = 'none';
+      panelPerception.style.display = 'flex';
+
+      // 토큰 클릭 가능 표시
+      canvas.querySelectorAll('.token').forEach(t => t.classList.add('clickable'));
+      syncHidden();
+      refreshFlags();
+    } else {
+      panelPerception.style.display = 'none';
+      panelList.style.display = 'flex';
+      canvas.querySelectorAll('.token').forEach(t => t.classList.remove('clickable'));
+    }
+  }
+
+  btnNextStep?.addEventListener('click', () => setPerceptionMode(true));
+  btnBack?.addEventListener('click', () => setPerceptionMode(false));
+
   /**
    * 초기 배치 복원 (하위호환 포함)
    * - 신규: {name: {x, y, mode:'abs', ...}}  => x,y를 절대좌표로 사용
@@ -240,7 +463,7 @@
     const center = { x: cRect.width/2, y: cRect.height/2 };
 
     // Remove chips that are already placed
-    const chips = Array.from(friendList.querySelectorAll('.chip'));
+    const chips = friendList ? Array.from(friendList.querySelectorAll('.chip')) : [];
     chips.forEach(chip => {
       const n = chip.dataset.name;
       if (initialPlacements && initialPlacements[n]){
@@ -282,6 +505,8 @@
   }
 
   function enableChipDragToCanvas(){
+    if (!friendList) return;
+
     let draggingChip = null;
     let placeholder = null;
     let offsetX = 0, offsetY = 0;
@@ -455,6 +680,10 @@
   window.addEventListener('load', () => {
     enableChipDragToCanvas();
     setTimeout(restoreInitial, 0);
+
+    // readonly 상태에서는 기본적으로 마무리 단계가 아닌 "학생 목록" 상태로 시작
+    setActiveRank(null);
+    syncHidden();
   });
 </script>
 
