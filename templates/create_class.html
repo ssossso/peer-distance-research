@@ -81,7 +81,8 @@
       const g = document.createElement('input');
       g.type = 'text';
       g.className = 'grid-input';
-      g.placeholder = '예: 남 / 여';
+      g.placeholder = '예: 남 또는 여 (필수)';
+      g.required = true;
       tdGender.appendChild(g);
 
       tr.appendChild(tdNo);
@@ -92,6 +93,7 @@
     }
 
 
+
     function initRows(n){
       for(let i=1;i<=n;i++) body.appendChild(makeRow(i));
     }
@@ -99,7 +101,9 @@
     function serializeStudents(){
       const lines = [];
       const rows = body.querySelectorAll('tr');
-      rows.forEach((r, idx) => {
+
+      for(let idx = 0; idx < rows.length; idx++){
+        const r = rows[idx];
         const inputs = r.querySelectorAll('input');
 
         const noInput = inputs[0];
@@ -107,17 +111,36 @@
         const genderInput = inputs[2];
 
         const name = (nameInput?.value || '').trim();
-        if(!name) return;
+        if(!name) continue;
 
         let no = (noInput?.value || '').trim();
         if(!no) no = String(idx + 1);
 
-        const gender = (genderInput?.value || '').trim(); // 예: 남 / 남자 / 여학생 ...
-        // 형식: 번호 \t 이름 \t 성별(원문)
+        const gender = (genderInput?.value || '').trim();
+
+        if(!gender){
+          genderInput.focus();
+          alert(`${idx + 1}번째 줄: 성별이 비어 있어요. (남/여)`);
+          throw new Error("gender_required");
+        }
+
         lines.push(`${no}\t${name}\t${gender}`);
-      });
+      }
+
       hidden.value = lines.join('\n');
     }
+        const formEl = document.querySelector('form');
+    if(formEl){
+      formEl.addEventListener('submit', (e) => {
+        try{
+          serializeStudents();
+        }catch(err){
+          e.preventDefault();
+        }
+      });
+    }
+
+
 
 
     initRows(20);
