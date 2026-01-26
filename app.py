@@ -2506,11 +2506,22 @@ def teacher_sync_from_sheet(code):
     if not cls or cls.get("_forbidden"):
         return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
 
-    sync_results_from_sheet_to_db(
-        class_code=code,
-        sid=sid,
-        teacher_username=session["teacher"]
-    )
+    try:
+        sync_results_from_sheet_to_db(
+            class_code=code,
+            sid=sid,
+            teacher_username=session["teacher"]
+        )
+    except Exception as e:
+        # Render 로그에도 남기고, 브라우저에서도 원인을 바로 보이게 반환
+        app.logger.exception("sync_from_sheet failed: code=%s sid=%s teacher=%s", code, sid, session.get("teacher"))
+        return jsonify({
+            "status": "error",
+            "where": "teacher_sync_from_sheet",
+            "class_code": code,
+            "sid": sid,
+            "message": str(e)
+        }), 500
 
     return redirect(f"/teacher/class/{code}/v2?sid={sid}&open=1")
 
