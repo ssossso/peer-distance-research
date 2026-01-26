@@ -3294,7 +3294,46 @@ def teacher_placement_write(run_id: int):
         except Exception:
             placements_obj = {}
 
+        # 1) DB에 저장(기존 동작 유지)
         db_update_teacher_run_placements(run_id, placements_obj)
+
+        # 2) 구글 시트 Results 탭에도 저장(원자료)
+        #    - teacher/학생 저장과 동일하게 result_append 사용
+        #    - teacher는 session["teacher"]
+        #    - student에는 teacher_username을 넣어서 "교사 1줄"로 구분
+        name_to_no = {s.get("name", ""): str(s.get("no", "")).strip() for s in students}
+
+        placements_for_sheet = {}
+        for name, v in (placements_obj or {}).items():
+            key = name_to_no.get(name) or name  # 가능하면 학생번호, 아니면 이름
+            if isinstance(v, (list, tuple)) and len(v) >= 2:
+                placements_for_sheet[key] = [v[0], v[1]]
+            elif isinstance(v, dict) and ("x" in v) and ("y" in v):
+                placements_for_sheet[key] = [v.get("x"), v.get("y")]
+            else:
+                placements_for_sheet[key] = v
+
+        resp = post_to_sheet({
+            "action": "result_append",
+            "teacher": session["teacher"],
+            "class_code": code,
+            "student": session["teacher"],  # 교사 1줄(teacher=student) 규칙
+            "session": str(sid),
+            "placements": placements_for_sheet,
+            "ip": request.headers.get("X-Forwarded-For", request.remote_addr) or "",
+        })
+
+        if resp.get("status") != "ok":
+            app.logger.error("teacher placement save to sheet failed: %s", resp)
+            return jsonify({
+                "status": "error",
+                "where": "teacher_placement_write",
+                "message": f"저장 실패(구글 시트): {resp}",
+                "class_code": code,
+                "sid": str(sid),
+                "run_id": run_id,
+            }), 500
+
         return redirect(f"/teacher/placement/{run_id}/complete")
 
     return render_template(
