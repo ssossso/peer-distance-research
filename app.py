@@ -2036,9 +2036,7 @@ def teacher_manage_students(code: str):
         if action == "add":
             student_no = (request.form.get("student_no") or "").strip()
             name = (request.form.get("name") or "").strip()
-            gender = (request.form.get("gender") or "").upper().strip()
-            if gender not in ["M", "F"]:
-                gender = ""
+            gender = normalize_gender(request.form.get("gender") or "")
 
             if name:
                 import random
@@ -2087,9 +2085,8 @@ def teacher_manage_students(code: str):
         # 3) 성별 수정
         if action == "set_gender":
             name = (request.form.get("name") or "").strip()
-            gender = (request.form.get("gender") or "").upper().strip()
-            if gender not in ["M", "F", ""]:
-                gender = ""
+            gender = normalize_gender(request.form.get("gender") or "")
+
             if name:
                 with engine.begin() as conn:
                     conn.execute(text("""
