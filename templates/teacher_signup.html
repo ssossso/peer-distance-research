@@ -30,19 +30,49 @@
     padding:12px;
   }
 
+  /* (추가 보정) 연구 박스 내부 항목 간 간격을 일정하게 */
   .research-stack{
     display:flex;
     flex-direction:column;
-    gap:12px;
+    gap:14px; /* 기존 12px -> 조금 더 안정적으로 */
   }
 
-  /* 라디오 선택지: 가운데 정렬 */
+  .r-field{
+    display:flex;
+    flex-direction:column;
+  }
+
+  .r-help{
+    font-size:12px;
+    font-weight:500;
+    color:#6b7280;
+    line-height:1.35;
+    margin:0 0 8px 0; /* 안내문이 있어도 input과 간격 일정 */
+  }
+
+  /* (보정2) 연구 박스 내부 input을 base.html input과 동일 규격으로 강제 */
+  .research-box input{
+    padding:10px;            /* base input과 동일 */
+    border-radius:8px;       /* base input과 동일 */
+    border:1px solid #ccc;   /* base input과 동일 */
+    width:100%;
+    box-sizing:border-box;
+  }
+
+  /* 입력칸 상단 간격을 통일 (라벨/안내문 뒤에 동일 간격) */
+  .r-input{
+    margin-top:0;
+  }
+
+  /* 라디오 선택지: 가운데 정렬 + 줄바꿈 시 row-gap 적용 */
   .radio-row{
     display:flex;
-    gap:12px;
     flex-wrap:wrap;
     align-items:center;
-    justify-content:center; /* (요청4) 가운데 정렬 */
+    justify-content:center;
+    column-gap:12px;
+    row-gap:8px; /* 줄바꿈 간격 */
+    padding-top:2px; /* 라벨 아래 시각적 숨 */
   }
 
   .radio-row label{
@@ -52,6 +82,11 @@
     margin:0;
     white-space:nowrap;
     font-weight:400;
+  }
+
+  /* 라디오 블록(라벨 아래 내용)과 다음 필드 사이 시각적 간격 안정화 */
+  .r-radio{
+    margin-top:2px;
   }
 
   /* ===== 비밀번호 눈 아이콘 위치 고정(입력칸 기준) ===== */
@@ -162,43 +197,46 @@
         도움을 주셔서 정말 감사합니다💙
       </div>
 
-      <!-- (요청2,3) 이름/학교/교직경력/담당학년을 같은 박스 영역에, 순서 재정렬 -->
       <div class="research-box">
         <div class="research-stack">
 
           <!-- 이름 -->
-          <div>
+          <div class="r-field">
             <div class="form-label">이름</div>
-            <div style="font-size:12px; font-weight:500; color:#6b7280; line-height:1.35; margin:-2px 0 8px 0;">
+            <div class="r-help">
               실명, 연구 끝나고 인터뷰 요청할 때 데이터 매칭 용도로 사용합니다. 소히가 알아볼 수 있는 별명도 괜차나
             </div>
-            <input name="research_name" required>
+            <input class="r-input" name="research_name" required>
           </div>
 
           <!-- 학교 -->
-          <div>
+          <div class="r-field">
             <div class="form-label">학교</div>
-            <input name="research_school" required>
+            <input class="r-input" name="research_school" required>
           </div>
 
           <!-- 교직경력 -->
-          <div>
+          <div class="r-field">
             <div class="form-label">나의 교직경력은?</div>
-            <div class="radio-row">
-              <label><input type="radio" name="teaching_years" value="1-5" required>1–5년</label>
-              <label><input type="radio" name="teaching_years" value="6-10">6–10년</label>
-              <label><input type="radio" name="teaching_years" value="11-15">11–15년</label>
-              <label><input type="radio" name="teaching_years" value="16+">16년+</label>
+            <div class="r-radio">
+              <div class="radio-row">
+                <label><input type="radio" name="teaching_years" value="1-5" required>1–5년</label>
+                <label><input type="radio" name="teaching_years" value="6-10">6–10년</label>
+                <label><input type="radio" name="teaching_years" value="11-15">11–15년</label>
+                <label><input type="radio" name="teaching_years" value="16+">16년+</label>
+              </div>
             </div>
           </div>
 
           <!-- 담당학년 -->
-          <div>
+          <div class="r-field">
             <div class="form-label">현재 담당 학년은?</div>
-            <div class="radio-row">
-              <label><input type="radio" name="current_grade" value="4" required>4학년</label>
-              <label><input type="radio" name="current_grade" value="5">5학년</label>
-              <label><input type="radio" name="current_grade" value="6">6학년</label>
+            <div class="r-radio">
+              <div class="radio-row">
+                <label><input type="radio" name="current_grade" value="4" required>4학년</label>
+                <label><input type="radio" name="current_grade" value="5">5학년</label>
+                <label><input type="radio" name="current_grade" value="6">6학년</label>
+              </div>
             </div>
           </div>
 
