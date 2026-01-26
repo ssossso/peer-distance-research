@@ -316,8 +316,17 @@
         </div>
       {% endfor %}
 
-      {# 다운로드 버튼: 학생 참여 현황 박스 맨 하단(오른쪽 정렬) #}
-      <div class="btn-row" style="justify-content:flex-end; margin-top:12px;">
+{# 다운로드 버튼: 학생 참여 현황 박스 맨 하단(오른쪽 정렬) #}
+      <div class="btn-row" style="justify-content:flex-end; margin-top:12px; gap:8px;">
+        <a
+          class="pill action-btn"
+          href="/teacher/class/{{ code }}/analysis?sid={{ sid }}"
+          style="text-decoration:none; display:inline-flex; align-items:center; gap:8px;"
+          title="연구 분석 보기"
+        >
+          <span>연구 분석 보기</span>
+        </a>
+
         <a
           class="pill action-btn"
           href="/teacher/class/{{ code }}/student_pin_pdf?sid={{ sid }}"
