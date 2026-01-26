@@ -47,7 +47,56 @@
         <div id="dbscan_reflection" style="margin-top:8px; color:#374151;"></div>
         <div id="dbscan_note" style="margin-top:10px; color:#6b7280; font-size:13px;"></div>
       </div>
-    
+
+
+      <div id="dbscan_change_box" style="margin-top:10px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div style="font-weight:950;">이전 회차 대비 변화</div>
+
+          <span style="color:#6b7280; font-weight:800; font-size:12px;">
+            (구조 지표의 증감에 기반한 비교 요약)
+          </span>
+
+          <div style="flex:1;"></div>
+
+          <label style="display:flex; align-items:center; gap:6px; font-weight:800; color:#374151;">
+            이전
+            <select id="chg_prev" style="padding:6px 8px; border-radius:10px; border:1px solid #d1d5db;">
+              <option value="1">1차</option>
+              <option value="2">2차</option>
+              <option value="3">3차</option>
+              <option value="4">4차</option>
+              <option value="5">5차</option>
+            </select>
+          </label>
+
+          <label style="display:flex; align-items:center; gap:6px; font-weight:800; color:#374151;">
+            현재
+            <select id="chg_curr" style="padding:6px 8px; border-radius:10px; border:1px solid #d1d5db;">
+              <option value="1">1차</option>
+              <option value="2">2차</option>
+              <option value="3">3차</option>
+              <option value="4">4차</option>
+              <option value="5">5차</option>
+            </select>
+          </label>
+
+          <button id="chg_run" class="btn" type="button" style="padding:8px 12px;">비교</button>
+        </div>
+
+        <div id="chg_status" style="margin-top:10px; color:#6b7280; font-weight:800;"></div>
+
+        <div id="chg_summary" style="margin-top:8px; font-weight:900;"></div>
+        <div id="chg_signal" style="margin-top:8px; font-weight:800; color:#374151;"></div>
+        <div id="chg_reflection" style="margin-top:8px; color:#374151;"></div>
+        <div id="chg_note" style="margin-top:10px; color:#6b7280; font-size:13px;"></div>
+
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer; font-weight:900;">(연구 재현용) 변화 비교 원자료 보기</summary>
+          <pre id="chg_raw" style="white-space:pre-wrap; font-size:12px; margin-top:8px; background:#0b1020; color:#e5e7eb; padding:10px; border-radius:12px;"></pre>
+        </details>
+      </div>
+
       
       <details style="margin-top:10px;">
         <summary style="cursor:pointer; font-weight:950;">분석 설정(연구 재현용)</summary>
@@ -332,6 +381,93 @@
   if(kRun){
     kRun.addEventListener("click", runKmeans);
   }
+  // -------------------------
+  // DBSCAN change (prev vs curr)
+  // -------------------------
+  const chgPrev = document.getElementById("chg_prev");
+  const chgCurr = document.getElementById("chg_curr");
+  const chgRun = document.getElementById("chg_run");
+
+  const chgStatus = document.getElementById("chg_status");
+  const chgSummary = document.getElementById("chg_summary");
+  const chgSignal = document.getElementById("chg_signal");
+  const chgReflection = document.getElementById("chg_reflection");
+  const chgNote = document.getElementById("chg_note");
+  const chgRaw = document.getElementById("chg_raw");
+
+  function setChangeLoading(msg){
+    if(chgStatus) chgStatus.textContent = msg || "";
+    if(chgSummary) chgSummary.textContent = "";
+    if(chgSignal) chgSignal.textContent = "";
+    if(chgReflection) chgReflection.textContent = "";
+    if(chgNote) chgNote.textContent = "";
+    if(chgRaw) chgRaw.textContent = "";
+  }
+
+  function renderChange(data){
+    if(chgRaw) chgRaw.textContent = JSON.stringify(data || {}, null, 2);
+
+    if(!data || data.error){
+      if(chgStatus) chgStatus.textContent = data && data.error ? String(data.error) : "비교 데이터를 불러오지 못했습니다.";
+      return;
+    }
+
+    const ch = (data && data.change) ? data.change : null;
+    if(!ch){
+      if(chgStatus) chgStatus.textContent = "변화 요약이 없습니다.";
+      return;
+    }
+
+    if(chgStatus) chgStatus.textContent = "";
+    if(chgSummary) chgSummary.textContent = ch.change_summary || "";
+    if(chgSignal) chgSignal.textContent = ch.change_signal || "";
+    if(chgReflection) chgReflection.textContent = ch.reflection_prompt || "";
+    if(chgNote) chgNote.textContent = ch.note || "";
+  }
+
+  function runChange(){
+    const prevSid = chgPrev && chgPrev.value ? chgPrev.value : "1";
+    const currSid = chgCurr && chgCurr.value ? chgCurr.value : sid;
+
+    // 같은 회차 비교는 막기
+    if(prevSid === currSid){
+      setChangeLoading("");
+      if(chgStatus) chgStatus.textContent = "이전/현재 회차가 동일합니다. 다른 회차를 선택해 주세요.";
+      return;
+    }
+
+    const url = `/analysis/class/${code}/dbscan_change.json?prev=${encodeURIComponent(prevSid)}&curr=${encodeURIComponent(currSid)}`;
+    setChangeLoading("비교 요약을 불러오는 중…");
+
+    fetch(url)
+      .then(r => r.json())
+      .then(renderChange)
+      .catch(err => {
+        setChangeLoading("");
+        if(chgStatus) chgStatus.textContent = "비교 데이터를 불러오지 못했습니다.";
+        console.error(err);
+      });
+  }
+
+  // 초기값: "현재 sid - 1"을 prev로 자동 세팅(가능한 범위 내)
+  function initChangeSelectors(){
+    if(!chgPrev || !chgCurr) return;
+
+    const curr = parseInt(sid, 10);
+    const prev = isFinite(curr) ? (curr > 1 ? (curr - 1) : 1) : 1;
+
+    chgCurr.value = String(curr);
+    chgPrev.value = String(prev);
+  }
+
+  initChangeSelectors();
+
+  if(chgRun){
+    chgRun.addEventListener("click", runChange);
+  }
+
+  // 현재 화면에 들어오면 자동으로 1회 비교 실행(교사 UX)
+  runChange();
 })();
 </script>
 
