@@ -2278,6 +2278,28 @@ def class_detail_v2(code):
             open_panel=open_panel,
         )
 
+  @app.route("/teacher/class/<code>/analysis")
+def teacher_analysis(code):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+    sid = (request.args.get("sid") or "1").strip()
+    if sid not in ["1", "2", "3", "4", "5"]:
+        sid = "1"
+
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls or cls.get("_forbidden"):
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+    cls = ensure_class_schema(cls)
+    return render_template(
+        "teacher_analysis_dbscan.html",
+        cls=cls,
+        code=code,
+        sid=sid,
+    )
+  
     # JSON fallback
     d = load_data()
     cls = ensure_class_schema(d.get("classes", {}).get(code))
@@ -3483,6 +3505,163 @@ def kmeans_2d(points: List[Tuple[float, float]], k: int, n_init: int = 10, max_i
 
     return best_labels, best_centers, float(best_inertia if best_inertia is not None else 0.0)
 
+# -------------------------
+# DBSCAN (core analysis for SPM v2)
+# -------------------------
+
+def _standardize_2d(points):
+    if not points:
+        return [], {"mx": 0.0, "my": 0.0, "sx": 1.0, "sy": 1.0}
+
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    mx = sum(xs) / len(xs)
+    my = sum(ys) / len(ys)
+
+    vx = sum((x - mx) ** 2 for x in xs) / len(xs)
+    vy = sum((y - my) ** 2 for y in ys) / len(ys)
+    sx = math.sqrt(vx) if vx > 1e-12 else 1.0
+    sy = math.sqrt(vy) if vy > 1e-12 else 1.0
+
+    z = [((x - mx) / sx, (y - my) / sy) for x, y in points]
+    return z, {"mx": mx, "my": my, "sx": sx, "sy": sy}
+
+
+def _kth_neighbor_distances(points, k):
+    n = len(points)
+    kk = max(1, min(k, n - 1))
+    out = []
+
+    for i in range(n):
+        xi, yi = points[i]
+        ds = []
+        for j in range(n):
+            if i == j:
+                continue
+            xj, yj = points[j]
+            ds.append(math.hypot(xi - xj, yi - yj))
+        ds.sort()
+        out.append(ds[kk - 1])
+
+    return out
+
+
+def _elbow_epsilon(kdists):
+    ys = sorted(kdists)
+    if len(ys) < 3:
+        return ys[-1]
+
+    y0, y1 = ys[0], ys[-1]
+    ys_n = [(y - y0) / (y1 - y0) for y in ys]
+
+    ax, ay = 0, 0
+    bx, by = len(ys) - 1, 1
+
+    def dist(px, py):
+        return abs((by - ay) * px - (bx - ax) * py + bx * ay - by * ax) / math.hypot(by - ay, bx - ax)
+
+    best_i, best_d = 0, -1
+    for i, y in enumerate(ys_n):
+        d = dist(i, y)
+        if d > best_d:
+            best_i, best_d = i, d
+
+    return ys[best_i]
+
+
+def _dbscan_2d(points, eps, min_samples):
+    n = len(points)
+    neigh = [[] for _ in range(n)]
+
+    for i in range(n):
+        for j in range(n):
+            if math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1]) <= eps:
+                neigh[i].append(j)
+
+    is_core = [len(neigh[i]) >= min_samples for i in range(n)]
+    labels = [-1] * n
+    visited = [False] * n
+    cid = 0
+
+    for i in range(n):
+        if visited[i] or not is_core[i]:
+            continue
+
+        visited[i] = True
+        labels[i] = cid
+        seeds = list(neigh[i])
+
+        k = 0
+        while k < len(seeds):
+            j = seeds[k]
+            if not visited[j]:
+                visited[j] = True
+                if is_core[j]:
+                    seeds.extend([x for x in neigh[j] if x not in seeds])
+            if labels[j] == -1:
+                labels[j] = cid
+            k += 1
+
+        cid += 1
+
+    return labels, is_core
+
+
+def dbscan_structure_payload(class_code, sid):
+    avg = cache_get(class_code, sid, f"student_avg_{sid}") or \
+          student_avg_distance_payload(class_code, sid)
+
+    names = avg["names"]
+    raw = [(p["x"], p["y"]) for p in avg["mds_2d"]]
+
+    Z, stats = _standardize_2d(raw)
+    n = len(Z)
+    min_samples = max(3, round(math.log(n)))
+    kd = _kth_neighbor_distances(Z, min_samples)
+    eps = max(0.15, min(0.8, _elbow_epsilon(kd)))
+
+    labels, is_core = _dbscan_2d(Z, eps, min_samples)
+
+    points = []
+    dense = boundary = isolated = 0
+    clusters = {}
+
+    for i in range(n):
+        if labels[i] == -1:
+            state = "isolated"
+            isolated += 1
+        elif is_core[i]:
+            state = "dense"
+            dense += 1
+            clusters[labels[i]] = clusters.get(labels[i], 0) + 1
+        else:
+            state = "boundary"
+            boundary += 1
+            clusters[labels[i]] = clusters.get(labels[i], 0) + 1
+
+        points.append({
+            "name": names[i],
+            "x": raw[i][0],
+            "y": raw[i][1],
+            "state": state
+        })
+
+    return {
+        "points": points,
+        "fog_points": [p for p in points if p["state"] == "dense"],
+        "counts": {
+            "dense": dense,
+            "boundary": boundary,
+            "isolated": isolated,
+            "cluster_sizes": list(clusters.values())
+        },
+        "params": {
+            "epsilon": eps,
+            "min_samples": min_samples,
+            "standardize": stats
+        }
+    }
+
 
 def kmeans_summary_payload(class_code: str, sid: str, k: int) -> Dict[str, Any]:
     avg_cache_key = f"student_avg_{sid}"
@@ -3674,6 +3853,27 @@ def analysis_kmeans_summary(code, sid):
         return jsonify(cached)
 
     payload = kmeans_summary_payload(code, sid, k)
+    cache_set(code, sid, cache_key, payload)
+    return jsonify(payload)
+
+@app.route("/analysis/class/<code>/<sid>/dbscan_structure.json")
+def analysis_dbscan_structure(code, sid):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = code.upper()
+    sid = sid if sid in ["1", "2", "3", "4", "5"] else "1"
+
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls or cls.get("_forbidden"):
+        return jsonify({"error": "forbidden"}), 403
+
+    cache_key = f"dbscan_structure_{sid}"
+    cached = cache_get(code, sid, cache_key)
+    if cached:
+        return jsonify(cached)
+
+    payload = dbscan_structure_payload(code, sid)
     cache_set(code, sid, cache_key, payload)
     return jsonify(payload)
 
