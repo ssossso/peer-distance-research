@@ -1565,7 +1565,7 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
 
     Layout requirements (your spec):
     - A4 landscape
-    - Top 60%: title + class/sid/date + "학생 로그인 PIN 코드" only (no student codes here)
+    - Top 60%: title + class/sid/date + "학생 로그인 PIN 코드 인" only (no student codes here)
     - Bottom 40%: one row containing 10 students per page
     - No solid outlines / no horizontal lines
     - Font sizes ~200% (already reflected)
@@ -1592,8 +1592,8 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
     title_fs = 34
     meta_fs = 18
     sub_fs = 20
-    name_fs = 24
-    pin_fs = 34
+    name_fs = 22
+    pin_fs = 26
 
     per_page = 10
 
