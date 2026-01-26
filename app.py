@@ -570,6 +570,27 @@ def post_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "error", "message": "invalid json response", "text": r.text[:300]}
 
 def sheet_list_results(class_code: str, sid: str) -> List[Dict[str, Any]]:
+    """
+    Google Sheets Results 시트에서 특정 학급/회차의 결과를 조회한다.
+    테스트 데이터 동기화 전용.
+    """
+    resp = post_to_sheet({
+        "action": "results_list",
+        "class_code": class_code,
+        "session": str(sid),
+    })
+
+    if resp.get("status") != "ok":
+        raise RuntimeError(f"sheet_list_results failed: {resp}")
+
+    rows = resp.get("rows") or []
+    if not isinstance(rows, list):
+        return []
+
+    return rows
+
+
+def sheet_list_results(class_code: str, sid: str) -> List[Dict[str, Any]]:
     """Google Sheets Results에서 특정 학급/회차 row 목록을 가져온다(테스트/동기화용)."""
     resp = post_to_sheet({
         "action": "results_list",
@@ -1280,6 +1301,55 @@ def db_complete_teacher_run(run_id: int, confidence_score: int) -> None:
             "confidence_score": int(confidence_score),
             "id": run_id
         })
+
+def sync_results_from_sheet_to_db(class_code: str, sid: str, teacher_username: str) -> Dict[str, int]:
+    """
+    Google Sheets Results의 데이터를 Postgres로 동기화한다.
+    - 학생: student_sessions (submitted = TRUE)
+    - 교사: teacher_placement_runs (completed)
+    """
+    rows = sheet_list_results(class_code, sid)
+
+    synced_students = 0
+    synced_teacher = 0
+
+    for r in rows:
+        student = (r.get("student") or "").strip()
+        placements_raw = r.get("placements") or "{}"
+
+        try:
+            placements = json.loads(placements_raw) if isinstance(placements_raw, str) else placements_raw
+        except Exception:
+            placements = {}
+
+        # 교사 관찰
+        if student == "teacher":
+            run_id = db_create_teacher_run(
+                class_code=class_code,
+                teacher_username=teacher_username,
+                sid=str(sid),
+                condition="sheet_import"   # 테스트/연구용 명시
+            )
+            db_update_teacher_run_placements(run_id, placements)
+            db_complete_teacher_run(run_id, confidence_score=0)
+            synced_teacher += 1
+            continue
+
+        # 학생 인식
+        if student:
+            db_upsert_student_session(
+                class_code=class_code,
+                student_name=student,
+                sid=str(sid),
+                placements=placements,
+                submitted=True
+            )
+            synced_students += 1
+
+    return {
+        "teacher_runs": synced_teacher,
+        "student_rows": synced_students
+    }
 
 
 def db_replace_teacher_decisions(run_id: int, decisions: List[Dict[str, Any]]) -> None:
@@ -2354,6 +2424,28 @@ def class_detail_v2(code):
             session_links=session_links,
             open_panel=open_panel,
         )
+
+@app.route("/teacher/class/<code>/sync_from_sheet")
+def teacher_sync_from_sheet(code):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = code.upper().strip()
+    sid = (request.args.get("sid") or session.get("selected_session") or "1").strip()
+
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls or cls.get("_forbidden"):
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+    sync_results_from_sheet_to_db(
+        class_code=code,
+        sid=sid,
+        teacher_username=session["teacher"]
+    )
+
+    # 동기화 후 원래 화면으로 복귀
+    return redirect(f"/teacher/class/{code}/v2?sid={sid}&open=1")
+
 
 @app.route("/teacher/class/<code>/sync_from_sheet")
 def teacher_sync_from_sheet(code):
