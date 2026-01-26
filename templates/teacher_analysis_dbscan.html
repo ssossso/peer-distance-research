@@ -14,7 +14,7 @@
     <div style="padding:10px 12px; background:#f8fafc; border-bottom:1px solid #eef2f7; font-weight:950;">
       구조 시각화
       <span style="margin-left:8px; color:#6b7280; font-weight:800; font-size:12px;">
-        (알고리즘 용어는 숨기고 상태로만 표시)
+        (상태로만 표시)
       </span>
     </div>
 
@@ -37,7 +37,7 @@
       </div>
 
       <div id="notes" style="margin-top:10px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; font-weight:800; color:#374151;">
-        분석 메모가 여기에 표시됩니다.
+        
       </div>
       
       <div id="dbscan_teacher_box" style="margin-top:10px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
@@ -45,8 +45,8 @@
         <div id="dbscan_structure_summary" style="margin-top:8px; font-weight:900;"></div>
         <div id="dbscan_key_signal" style="margin-top:8px; font-weight:800; color:#374151;"></div>
         <div id="dbscan_reflection" style="margin-top:8px; color:#374151;"></div>
-        <div id="dbscan_note" style="margin-top:10px; color:#6b7280; font-size:13px;"></div>
-      </div>
+        <!-- dbscan_note: 문구 제거(주석 처리) -->
+</div>
 
 
       <div id="dbscan_change_box" style="margin-top:10px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
@@ -97,12 +97,7 @@
         </details>
       </div>
 
-      
-      <details style="margin-top:10px;">
-        <summary style="cursor:pointer; font-weight:950;">분석 설정(연구 재현용)</summary>
-        <pre id="params" style="white-space:pre-wrap; font-size:12px; margin-top:8px; background:#0b1020; color:#e5e7eb; padding:10px; border-radius:12px;"></pre>
-      </details>
-
+      <!-- 분석 설정(연구 재현용): 화면에서 숨김(주석 처리) -->
       <details style="margin-top:10px;">
         <summary style="cursor:pointer; font-weight:950;">관계 집단(개요) (보조)</summary>
 
@@ -204,8 +199,47 @@
     ctx.restore();
   }
 
+  function drawLabel(p){
+    const name = (p.name || p.label || p.student || "").toString().trim();
+    if(!name) return;
+
+    ctx.save();
+    ctx.font = "12px system-ui";
+    ctx.textBaseline = "middle";
+
+    const padX = 6;
+    const padY = 4;
+    const x = p.cx;
+    const y = p.cy + 16; // 점 아래
+
+    const w = ctx.measureText(name).width + padX * 2;
+    const h = 18;
+    const rx = x - w/2;
+    const ry = y - h/2;
+
+    // 배경(가독성)
+    ctx.fillStyle = "rgba(255,255,255,0.88)";
+    ctx.strokeStyle = "rgba(17,24,39,0.20)";
+    ctx.lineWidth = 1;
+
+    const r2 = 8;
+    ctx.beginPath();
+    ctx.moveTo(rx + r2, ry);
+    ctx.arcTo(rx + w, ry, rx + w, ry + h, r2);
+    ctx.arcTo(rx + w, ry + h, rx, ry + h, r2);
+    ctx.arcTo(rx, ry + h, rx, ry, r2);
+    ctx.arcTo(rx, ry, rx + w, ry, r2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#111827";
+    ctx.fillText(name, rx + padX, y);
+    ctx.restore();
+  }
+
   function drawPoint(p){
-    const r = 8;
+    const r = 9;
 
     // 밀집: 진한 점
     if(p.state === "dense"){
@@ -215,6 +249,7 @@
       ctx.arc(p.cx, p.cy, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+      drawLabel(p);
       return;
     }
 
@@ -233,6 +268,7 @@
       ctx.arc(p.cx, p.cy, r + 2, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
+      drawLabel(p);
       return;
     }
 
@@ -245,6 +281,7 @@
     ctx.arc(p.cx, p.cy, r + 2, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
+    drawLabel(p);
   }
 
   function renderDbscan(payload){
@@ -261,7 +298,17 @@
     document.getElementById("m_isolated").textContent = (c.isolated ?? "-");
 
     const notes = payload.notes || [];
-    document.getElementById("notes").textContent = notes.length ? notes.join(" / ") : "특이 메모 없음";
+    const notesEl = document.getElementById("notes");
+    if(notesEl){
+      if(notes.length){
+        notesEl.style.display = "";
+        notesEl.textContent = notes.join(" / ");
+      }else{
+        // 특이 메모 없음: 카드 자체를 숨김
+        notesEl.style.display = "none";
+        notesEl.textContent = "";
+      }
+    }
 
     // 교사용 구조 요약(서버 생성 문장)
     const t = payload.teacher_summary || {};
@@ -273,9 +320,12 @@
     if(el1) el1.textContent = t.structure_summary || "";
     if(el2) el2.textContent = t.key_signal || "";
     if(el3) el3.textContent = t.reflection_prompt || "";
-    if(el4) el4.textContent = t.note || "";
 
-    document.getElementById("params").textContent = JSON.stringify(payload.params || {}, null, 2);
+    // note 문구는 화면에서 숨김(주석 처리된 영역)
+    if(el4){
+      el4.textContent = "";
+      el4.style.display = "none";
+    }
   }
 
 
