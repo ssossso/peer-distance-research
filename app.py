@@ -3767,18 +3767,56 @@ def kmeans_summary_payload(class_code: str, sid: str, k: int) -> Dict[str, Any]:
             "cluster_id": int(labels[i]) if i < len(labels) else 0,
         })
 
+    # 1) 표준 points: cluster_id -> group_no(1..k)
+    points_std: List[Dict[str, Any]] = []
+    assignments: Dict[str, int] = {}
+
+    for i in range(len(names)):
+        cid = int(labels[i]) if i < len(labels) else 0
+        group_no = cid + 1  # 1..k
+        nm = names[i]
+        assignments[nm] = group_no
+        points_std.append({
+            "name": nm,
+            "x": round(points[i][0], 6),
+            "y": round(points[i][1], 6),
+            "group_no": int(group_no),
+        })
+
+    # 2) 표준 groups: group_no별 members/centroid/size/mean_radius
+    members_by_group: Dict[int, List[str]] = {g: [] for g in range(1, kk + 1)}
+    for nm, gno in assignments.items():
+        if 1 <= gno <= kk:
+            members_by_group[gno].append(nm)
+
+    groups: List[Dict[str, Any]] = []
+    for gno in range(1, kk + 1):
+        cid = gno - 1
+        members = sorted(members_by_group.get(gno, []))
+        cx, cy = centers[cid]
+        groups.append({
+            "group_no": int(gno),
+            "size": int(len(members)),
+            "members": members,
+            "centroid": {"x": round(cx, 6), "y": round(cy, 6)},
+            "mean_radius": cluster_mean_radius[cid],
+        })
+
     return {
         "class_code": class_code,
         "session_id": sid,
-        "k": kk,
-        "n_points": len(points),
-        "cluster_sizes": cluster_sizes,
-        "cluster_mean_radius": cluster_mean_radius,
-        "inertia": round(float(inertia), 6),
-        "centers": [{"x": round(c[0], 6), "y": round(c[1], 6)} for c in centers],
-        "points": labeled_points,
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "k": int(kk),
+        "n_points": int(len(points)),
+        "groups": groups,
+        "assignments": assignments,
+        "points": points_std,
+        "meta": {
+            "inertia": round(float(inertia), 6),
+            "cluster_sizes": cluster_sizes,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        },
     }
+
 
 
 # -------------------------
