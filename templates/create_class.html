@@ -129,13 +129,15 @@
 
       hidden.value = lines.join('\n');
     }
-        const formEl = document.querySelector('form');
+
+    const formEl = document.querySelector('form');
     if(formEl){
       formEl.addEventListener('submit', (e) => {
         try{
           serializeStudents();
         }catch(err){
           e.preventDefault();
+          return;
         }
       });
     }
