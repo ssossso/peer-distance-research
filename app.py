@@ -2425,6 +2425,7 @@ def class_detail_v2(code):
             open_panel=open_panel,
         )
 
+
 @app.route("/teacher/class/<code>/sync_from_sheet")
 def teacher_sync_from_sheet(code):
     if "teacher" not in session:
@@ -2443,27 +2444,8 @@ def teacher_sync_from_sheet(code):
         teacher_username=session["teacher"]
     )
 
-    # 동기화 후 원래 화면으로 복귀
     return redirect(f"/teacher/class/{code}/v2?sid={sid}&open=1")
 
-
-@app.route("/teacher/class/<code>/sync_from_sheet")
-def teacher_sync_from_sheet(code):
-    if "teacher" not in session:
-        return redirect("/teacher/login")
-
-    code = (code or "").upper().strip()
-    sid = (request.args.get("sid") or session.get("selected_session") or "1").strip()
-
-    # 권한 확인(중요)
-    cls = db_get_class_for_teacher(code, session["teacher"])
-    if not cls or cls.get("_forbidden"):
-        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
-
-    stats = sync_results_from_sheet_to_db(code, sid, teacher_username=session["teacher"])
-
-    # 동기화 후 v2로 복귀
-    return redirect(f"/teacher/class/{code}/v2?sid={sid}&open=1")
 
       
 @app.route("/teacher/class/<code>/analysis_compare")
