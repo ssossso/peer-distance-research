@@ -256,9 +256,6 @@
   }
 
   function renderKmeans(payload){
-    // payload는 기존 kmeans_summary.json 구조를 그대로 사용
-    // 여기서는 UI에서 "집단 1/2/3" 형태로만 표현(알고리즘 용어 최소화)
-
     kRaw.textContent = JSON.stringify(payload || {}, null, 2);
 
     if(payload && payload.error){
@@ -266,65 +263,25 @@
       return;
     }
 
-    const k = payload.k ?? payload.K ?? payload.n_clusters ?? "";
-    const groups = payload.groups || payload.group_members || payload.clusters || null;
-
-    // groups 형태가 불확실할 수 있으므로, 가능한 케이스를 최대한 흡수
-    // 1) groups: [{"label":0,"members":[...]}...]
-    // 2) groups: [[...],[...],...]
-    // 3) assignments: {"name": idx}
-    const cards = [];
-
-    if(Array.isArray(groups)){
-      if(groups.length > 0 && Array.isArray(groups[0])){
-        // [[names...], ...]
-        for(let i=0;i<groups.length;i++){
-          const members = groups[i] || [];
-          const title = `집단 ${i+1}`;
-          const body = members.length ? members.join(", ") : "(없음)";
-          cards.push(card(title, body));
-        }
-      }else if(groups.length > 0 && typeof groups[0] === "object"){
-        // [{"members":[...]}...]
-        for(let i=0;i<groups.length;i++){
-          const g = groups[i] || {};
-          const members = g.members || g.names || [];
-          const title = `집단 ${i+1}`;
-          const body = (members && members.length) ? members.join(", ") : "(없음)";
-          cards.push(card(title, body));
-        }
-      }
-    }
-
-    // fallback: name_to_group
-    if(cards.length === 0 && payload && payload.assignments && typeof payload.assignments === "object"){
-      const map = payload.assignments;
-      const buckets = {};
-      for(const name in map){
-        const gi = String(map[name]);
-        if(!buckets[gi]) buckets[gi] = [];
-        buckets[gi].push(name);
-      }
-      const keys = Object.keys(buckets).sort((a,b)=>Number(a)-Number(b));
-      for(let i=0;i<keys.length;i++){
-        const members = buckets[keys[i]];
-        const title = `집단 ${i+1}`;
-        const body = members.length ? members.join(", ") : "(없음)";
-        cards.push(card(title, body));
-      }
-    }
-
-    if(cards.length === 0){
-      kStatus.textContent = "요약 결과를 표시할 형식이 아직 정해지지 않았습니다(원자료를 확인해 주세요).";
+    const groups = (payload && Array.isArray(payload.groups)) ? payload.groups : [];
+    if(groups.length === 0){
+      kStatus.textContent = "요약 결과가 없습니다.";
+      kResult.innerHTML = "";
       return;
     }
 
-    kStatus.textContent = `요약 완료 (집단 개수: ${k || cards.length})`;
+    kStatus.textContent = `요약 완료 (집단 개수: ${payload.k || groups.length})`;
     kResult.innerHTML = "";
-    for(const c of cards){
-      kResult.appendChild(c);
+
+    for(const g of groups){
+      const groupNo = g.group_no ?? "";
+      const members = Array.isArray(g.members) ? g.members : [];
+      const title = `집단 ${groupNo}`;
+      const body = members.length ? members.join(", ") : "(없음)";
+      kResult.appendChild(card(title, body));
     }
   }
+
 
   function runKmeans(){
     const k = (kSel && kSel.value) ? kSel.value : "3";
