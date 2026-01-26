@@ -4024,16 +4024,26 @@ def dbscan_structure_payload(class_code, sid):
     avg = cache_get(class_code, sid, f"student_avg_{sid}") or \
           student_avg_distance_payload(class_code, sid)
 
+    # KeyError 방지 + 빈 배열 방지
     names = avg.get("names", [])
     raw = [(p["x"], p["y"]) for p in (avg.get("mds_2d") or [])]
 
     Z, stats = _standardize_2d(raw)
     n = len(Z)
 
-    # 입력 데이터 부족(또는 없음) 방어: 500 대신 "분석 불가"를 200 JSON으로 반환
-    # - n==0이면 math.log(0)로 즉시 500이 발생했음
-    # - n<3이면 구조(밀집/경계/고립) 해석이 불안정하므로 no_data 처리
+    # 자료 부족(또는 없음) 처리: 500(시스템 오류) 대신 "분석 불가" JSON 반환
+    # - n==0이면 math.log(0)로 500이 나던 문제를 차단
+    # - n<3이면 구조 해석이 불안정하므로 no_data 처리
     if n < 3:
+        points = []
+        for i in range(n):
+            points.append({
+                "name": names[i] if i < len(names) else f"student_{i+1}",
+                "x": raw[i][0],
+                "y": raw[i][1],
+                "state": "isolated"
+            })
+
         counts = {
             "n_total": n,
             "dense": 0,
@@ -4053,7 +4063,7 @@ def dbscan_structure_payload(class_code, sid):
         return {
             "status": "no_data",
             "reason": "not_enough_points",
-            "points": [],
+            "points": points,
             "fog_points": [],
             "counts": counts,
             "teacher_summary": teacher_summary,
@@ -4063,6 +4073,66 @@ def dbscan_structure_payload(class_code, sid):
                 "standardize": stats
             }
         }
+
+    min_samples = max(3, round(math.log(n)))
+    kd = _kth_neighbor_distances(Z, min_samples)
+    eps = max(0.15, min(0.8, _elbow_epsilon(kd)))
+
+    labels, is_core = _dbscan_2d(Z, eps, min_samples)
+
+    points = []
+    dense = boundary = isolated = 0
+    clusters = {}
+
+    for i in range(n):
+        if labels[i] == -1:
+            state = "isolated"
+            isolated += 1
+        elif is_core[i]:
+            state = "dense"
+            dense += 1
+            clusters[labels[i]] = clusters.get(labels[i], 0) + 1
+        else:
+            state = "boundary"
+            boundary += 1
+            clusters[labels[i]] = clusters.get(labels[i], 0) + 1
+
+        points.append({
+            "name": names[i] if i < len(names) else f"student_{i+1}",
+            "x": raw[i][0],
+            "y": raw[i][1],
+            "state": state
+        })
+
+    counts = {
+        "n_total": n,
+        "dense": dense,
+        "boundary": boundary,
+        "isolated": isolated,
+        "cluster_sizes": list(clusters.values())
+    }
+
+    teacher_summary = dbscan_teacher_summary(
+        n_total=counts["n_total"],
+        dense_count=counts["dense"],
+        boundary_count=counts["boundary"],
+        isolated_count=counts["isolated"],
+        cluster_sizes=counts["cluster_sizes"],
+    )
+
+    return {
+        "status": "ok",
+        "points": points,
+        "fog_points": [p for p in points if p["state"] == "dense"],
+        "counts": counts,
+        "teacher_summary": teacher_summary,
+        "params": {
+            "epsilon": eps,
+            "min_samples": min_samples,
+            "standardize": stats
+        }
+    }
+
 
     min_samples = max(3, round(math.log(n)))
     kd = _kth_neighbor_distances(Z, min_samples)
