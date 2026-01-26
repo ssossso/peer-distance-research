@@ -622,6 +622,24 @@ def save_data_safely(d: Dict[str, Any]) -> None:
 
 def make_code() -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+def normalize_gender(raw: str) -> str:
+    """
+    성별 입력 정규화:
+    - 입력이 무엇이든 최종 저장은 "남" / "여" / ""(미입력) 중 하나로 통일
+    - 이번 프로젝트에서는 현장 사용 패턴(엑셀/한글 명부)에 맞춰 한국어 표현만 허용
+    """
+    s = (raw or "").strip()
+    if not s:
+        return ""
+
+    male = {"남", "남자", "남성", "남학생", "남아"}
+    female = {"여", "여자", "여성", "여학생", "여아"}
+
+    if s in male:
+        return "남"
+    if s in female:
+        return "여"
+    return ""
 
 
 # -------------------------
@@ -692,9 +710,7 @@ def db_create_class(teacher_username: str, class_code: str, class_name: str, stu
                 continue
 
             pin = make_pin(existing_pins)
-            gender = (s.get("gender") or "").upper()
-            if gender not in ["M", "F"]:
-                gender = ""
+            gender = normalize_gender(s.get("gender") or "")
 
             conn.execute(text("""
                 INSERT INTO students (class_code, student_no, name, gender, pin_code, active, joined_at)
@@ -1932,7 +1948,7 @@ def create_class():
             # - (이름만) / (번호, 이름) / (번호, 이름, 성별)
             name = ""
             no = ""
-            gender = ""
+            gender_raw = ""
 
             if len(parts) == 1:
                 name = parts[0]
@@ -1940,16 +1956,16 @@ def create_class():
             elif len(parts) == 2:
                 no, name = parts[0], parts[1]
             else:
-                no, name, gender = parts[0], parts[1], (parts[2] or "").upper()
+                no, name, gender_raw = parts[0], parts[1], (parts[2] or "").strip()
 
             if not name:
                 continue
 
-            if gender not in ["M", "F"]:
-                gender = ""
+            gender = normalize_gender(gender_raw)
 
             parsed.append({"no": str(no or auto_no), "name": name, "gender": gender})
             auto_no += 1
+
 
 
         if engine:
