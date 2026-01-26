@@ -1151,14 +1151,15 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
             LIMIT 1
         """)).fetchone() is not None
 
-        # 기존 데이터가 sid가 비어 있고 session_id만 있는 경우도 대비해서 조회 조건을 확장한다.
+        # session_id 타입이 integer가 아닌(text 등) 환경이 실제로 존재하므로
+        # CAST를 제거하고 텍스트 비교로 처리한다.
         if has_session_id:
             row = conn.execute(text("""
                 SELECT id
                 FROM student_sessions
                 WHERE class_code = :code
                   AND student_name = :name
-                  AND (sid = :sid OR session_id = CAST(:sid AS INTEGER))
+                  AND (sid = :sid OR session_id = :sid)
                 LIMIT 1
             """), {"code": class_code, "name": student_name, "sid": sid}).fetchone()
         else:
@@ -1174,7 +1175,7 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
                 conn.execute(text("""
                     UPDATE student_sessions
                     SET sid = :sid,
-                        session_id = CAST(:sid AS INTEGER),
+                        session_id = :sid,
                         placements = CAST(:placements AS jsonb),
                         placements_json = :placements_json,
                         submitted = :submitted
@@ -1207,7 +1208,7 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
                         placements, placements_json, submitted
                     )
                     VALUES (
-                        :code, :sid, CAST(:sid AS INTEGER), :name,
+                        :code, :sid, :sid, :name,
                         CAST(:placements AS jsonb), :placements_json, :submitted
                     )
                 """), {
