@@ -39,7 +39,16 @@
       <div id="notes" style="margin-top:10px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; font-weight:800; color:#374151;">
         분석 메모가 여기에 표시됩니다.
       </div>
-
+      
+      <div id="dbscan_teacher_box" style="margin-top:10px; padding:10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
+        <div style="font-weight:950;">구조 요약</div>
+        <div id="dbscan_structure_summary" style="margin-top:8px; font-weight:900;"></div>
+        <div id="dbscan_key_signal" style="margin-top:8px; font-weight:800; color:#374151;"></div>
+        <div id="dbscan_reflection" style="margin-top:8px; color:#374151;"></div>
+        <div id="dbscan_note" style="margin-top:10px; color:#6b7280; font-size:13px;"></div>
+      </div>
+    
+      
       <details style="margin-top:10px;">
         <summary style="cursor:pointer; font-weight:950;">분석 설정(연구 재현용)</summary>
         <pre id="params" style="white-space:pre-wrap; font-size:12px; margin-top:8px; background:#0b1020; color:#e5e7eb; padding:10px; border-radius:12px;"></pre>
@@ -205,8 +214,21 @@
     const notes = payload.notes || [];
     document.getElementById("notes").textContent = notes.length ? notes.join(" / ") : "특이 메모 없음";
 
+    // 교사용 구조 요약(서버 생성 문장)
+    const t = payload.teacher_summary || {};
+    const el1 = document.getElementById("dbscan_structure_summary");
+    const el2 = document.getElementById("dbscan_key_signal");
+    const el3 = document.getElementById("dbscan_reflection");
+    const el4 = document.getElementById("dbscan_note");
+
+    if(el1) el1.textContent = t.structure_summary || "";
+    if(el2) el2.textContent = t.key_signal || "";
+    if(el3) el3.textContent = t.reflection_prompt || "";
+    if(el4) el4.textContent = t.note || "";
+
     document.getElementById("params").textContent = JSON.stringify(payload.params || {}, null, 2);
   }
+
 
   fetch(dbscanUrl)
     .then(r => r.json())
@@ -274,8 +296,11 @@
     const kSummary = document.getElementById("k_summary_sentence");
     
     kStatus.textContent = "";
-    kSummary.textContent = `이번 회차에서 학생 관계는 ${payload.k}개의 관계 집단으로 요약될 수 있습니다. 다만 이 요약은 관계를 단순화하는 과정에서 일부 세부적인 차이가 줄어들 수 있으므로,
-관계 해석은 위의 구조를 우선하여 살펴보는 것을 추천합니다.”`;
+    kSummary.textContent =
+      `이번 회차에서 학생 관계는 ${payload.k}개의 관계 집단으로 요약될 수 있습니다. ` +
+      `다만 이 요약은 관계를 단순화하는 과정에서 일부 세부적인 차이가 줄어들 수 있으므로, ` +
+      `관계 해석은 위의 구조를 우선하여 살펴보는 것을 추천합니다.`;
+
     
     kResult.innerHTML = "";
 
