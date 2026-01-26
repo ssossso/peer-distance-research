@@ -569,26 +569,6 @@ def post_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         return {"status": "error", "message": "invalid json response", "text": r.text[:300]}
 
-def sheet_list_results(class_code: str, sid: str) -> List[Dict[str, Any]]:
-    """
-    Google Sheets Results 시트에서 특정 학급/회차의 결과를 조회한다.
-    테스트 데이터 동기화 전용.
-    """
-    resp = post_to_sheet({
-        "action": "results_list",
-        "class_code": class_code,
-        "session": str(sid),
-    })
-
-    if resp.get("status") != "ok":
-        raise RuntimeError(f"sheet_list_results failed: {resp}")
-
-    rows = resp.get("rows") or []
-    if not isinstance(rows, list):
-        return []
-
-    return rows
-
 
 def sheet_list_results(class_code: str, sid: str) -> List[Dict[str, Any]]:
     """Google Sheets Results에서 특정 학급/회차 row 목록을 가져온다(테스트/동기화용)."""
@@ -1237,48 +1217,6 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
                     "submitted": submitted
                 })
 
-
-def sync_results_from_sheet_to_db(class_code: str, sid: str, teacher_username: str) -> Dict[str, int]:
-    """
-    Google Sheets Results에 있는 원자료를 Postgres로 동기화한다.
-    - 학생: student_sessions upsert + submitted=TRUE
-    - 교사: teacher_placement_runs run 생성/완료 + submitted=TRUE
-    """
-    if not engine:
-        raise RuntimeError("DB engine not initialized")
-
-    rows = sheet_list_results(class_code, sid)
-
-    synced_students = 0
-    synced_teacher = 0
-
-    for r in rows:
-        student = (r.get("student") or "").strip()
-        placements_raw = r.get("placements") or "{}"
-
-        # placements는 Apps Script에서 문자열로 넘어옴(시트 셀). JSON 파싱.
-        try:
-            placements_obj = json.loads(placements_raw) if isinstance(placements_raw, str) else placements_raw
-            if not isinstance(placements_obj, dict):
-                placements_obj = {}
-        except Exception:
-            placements_obj = {}
-
-        # 1) 교사 관찰
-        if student == "teacher":
-            # 테스트 동기화는 condition을 'sheet_import'로 고정(논문 설명 가능)
-            run_id = db_create_teacher_run(class_code, teacher_username, str(sid), condition="sheet_import")
-            db_update_teacher_run_placements(run_id, placements_obj)
-            db_complete_teacher_run(run_id, confidence_score=0)
-            synced_teacher += 1
-            continue
-
-        # 2) 학생 응답(학생 이름이 student 컬럼에 들어있는 케이스)
-        if student:
-            db_upsert_student_session(class_code, student, str(sid), placements_obj, submitted=True)
-            synced_students += 1
-
-    return {"teacher_runs": synced_teacher, "student_rows": synced_students}
 
       
 def db_create_teacher_run(class_code: str, teacher_username: str, sid: str, condition: str, tool_run_id: Optional[int] = None) -> int:
@@ -3422,13 +3360,9 @@ def teacher_placement_complete(run_id: int):
     if not run or run["teacher_username"] != session["teacher"]:
         return "접근 권한이 없습니다.", 403
 
-    # 완료 화면에서 학생 목록 제공용
-    students = db_get_students_in_class(run["class_code"]) if engine else []
-
     if request.method == "POST":
         duration_ms = 0  # duration은 수집/분석하지 않음
         confidence_raw = (request.form.get("confidence_score") or "").strip()
-
 
         # 슬라이더: 0~100 int (범위 밖이면 자동 보정)
         try:
@@ -3449,7 +3383,8 @@ def teacher_placement_complete(run_id: int):
 
         return redirect(f"/teacher/class/{run['class_code']}?sid={run['session_id']}")
 
-    return render_template("teacher_complete.html", run=run, students=students)
+    return redirect(f"/teacher/placement/{run_id}")
+
 
 
 # -------------------------
