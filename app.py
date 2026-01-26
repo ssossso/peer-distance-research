@@ -3651,6 +3651,225 @@ def _dbscan_2d(points, eps, min_samples):
 
     return labels, is_core
 
+def dbscan_teacher_summary(
+    n_total: int,
+    dense_count: int,
+    boundary_count: int,
+    isolated_count: int,
+    cluster_sizes: list,
+) -> dict:
+    """
+    DBSCAN 단일 회차 결과를 교사용 관찰 문장으로 요약한다.
+    - 관찰 중심
+    - 핵심 신호 1개만 강조
+    - 청유형은 "~해보는 것 어떨까요?" 톤으로 고정
+    """
+
+    n_total = int(n_total or 0)
+    dense_count = int(dense_count or 0)
+    boundary_count = int(boundary_count or 0)
+    isolated_count = int(isolated_count or 0)
+    cluster_sizes = cluster_sizes or []
+
+    # 안전 처리
+    if n_total <= 0:
+        return {
+            "structure_summary": "이번 회차 결과를 요약할 수 없습니다.",
+            "key_signal": "참여 학생 수가 확인되지 않습니다.",
+            "reflection_prompt": "학생 참여 현황을 먼저 확인해 보는 것 어떨까요?",
+            "note": "이 결과는 학생 인식 기반 배치에 따른 구조 요약이며, 개별 관계를 확정하지 않습니다.",
+            "rule": "none",
+        }
+
+    isolated_ratio = isolated_count / n_total
+    boundary_ratio = boundary_count / n_total
+
+    cluster_count = len(cluster_sizes)
+    largest_cluster_ratio = (max(cluster_sizes) / n_total) if cluster_sizes else 0.0
+
+    structure_summary = (
+        f"이번 회차에서는 밀집 {dense_count}명, 경계 {boundary_count}명, 고립 {isolated_count}명으로 나타났습니다."
+    )
+
+    note = "이 결과는 학생 인식 기반 배치에 따른 구조 요약이며, 개별 관계를 확정하지 않습니다."
+
+    # 우선순위: A(고립) > C(쏠림) > B(경계) > D(분산) > none
+    # A: 고립 신호
+    if (isolated_ratio >= 0.15) or (isolated_count >= 3):
+        return {
+            "structure_summary": structure_summary,
+            "key_signal": "고립으로 표시된 학생이 상대적으로 많아, 일부 학생의 관계 경험을 한 번 살펴볼 필요가 있어 보입니다.",
+            "reflection_prompt": "해당 학생들의 최근 교내외 활동 변화나 학교생활 경험을 함께 떠올려 보는 것 어떨까요?",
+            "note": note,
+            "rule": "A_isolated",
+        }
+
+    # C: 한 집단 쏠림
+    if largest_cluster_ratio >= 0.55:
+        return {
+            "structure_summary": structure_summary,
+            "key_signal": "한 관계 중심이 비교적 크게 형성되어, 관계 구조가 중심–주변 형태로 나타날 가능성이 있습니다.",
+            "reflection_prompt": "관계 중심 바깥에 있는 학생들의 참여 경험이 어떻게 형성되고 있는지 한 번 돌아보는 것 어떨까요?",
+            "note": note,
+            "rule": "C_center_dominance",
+        }
+
+    # B: 경계 신호
+    if boundary_ratio >= 0.30:
+        return {
+            "structure_summary": structure_summary,
+            "key_signal": "경계 위치의 학생이 비교적 많아, 관계 구조의 경계가 넓게 형성된 상태로 보입니다.",
+            "reflection_prompt": "최근 교내외 활동 변화가 관계 경계에 어떤 영향을 주었는지 생각해 보는 것도 도움이 될 수 있습니다.",
+            "note": note,
+            "rule": "B_boundary",
+        }
+
+    # D: 분산/다중 집단
+    if (cluster_count >= 3) and (largest_cluster_ratio < 0.45):
+        return {
+            "structure_summary": structure_summary,
+            "key_signal": "관계가 여러 흐름으로 나뉘어 형성되어 있는 모습이 관찰됩니다.",
+            "reflection_prompt": "집단 간 교류가 자연스럽게 이루어질 수 있는 경험이 있었는지 떠올려 보는 것 어떨까요?",
+            "note": note,
+            "rule": "D_multi_flow",
+        }
+
+    # none
+    return {
+        "structure_summary": structure_summary,
+        "key_signal": "관계 구조에서 뚜렷한 특이 신호는 크게 나타나지 않습니다.",
+        "reflection_prompt": "현재의 관계 구조가 비교적 안정적으로 유지되고 있는지 지켜보는 것도 의미가 있을 수 있습니다.",
+        "note": note,
+        "rule": "none",
+    }
+
+
+def dbscan_change_summary(prev_counts: dict, curr_counts: dict) -> dict:
+    """
+    DBSCAN 회차 간 변화 서술(구조 지표 증감 기반).
+    - 개인 추적 없음
+    - 방향성만 제시
+    - 핵심 변화 신호 1개만 강조
+    """
+
+    def _safe_int(x):
+        try:
+            return int(x)
+        except Exception:
+            return 0
+
+    prev_n = _safe_int(prev_counts.get("n_total"))
+    curr_n = _safe_int(curr_counts.get("n_total"))
+
+    # 참여 인원이 0이면 비교 불가
+    if prev_n <= 0 or curr_n <= 0:
+        return {
+            "change_summary": "이전 회차와의 비교 요약을 만들기 어렵습니다.",
+            "change_signal": "참여 학생 수가 확인되지 않습니다.",
+            "reflection_prompt": "학생 참여 현황을 먼저 확인해 보는 것 어떨까요?",
+            "note": "이 변화는 학생 인식 기반 배치 결과의 비교에 따른 구조적 변화 요약이며, 개별 관계의 변화로 단정하지 않습니다.",
+            "rule": "none",
+        }
+
+    prev_dense = _safe_int(prev_counts.get("dense"))
+    prev_boundary = _safe_int(prev_counts.get("boundary"))
+    prev_isolated = _safe_int(prev_counts.get("isolated"))
+    prev_sizes = prev_counts.get("cluster_sizes") or []
+
+    curr_dense = _safe_int(curr_counts.get("dense"))
+    curr_boundary = _safe_int(curr_counts.get("boundary"))
+    curr_isolated = _safe_int(curr_counts.get("isolated"))
+    curr_sizes = curr_counts.get("cluster_sizes") or []
+
+    d_isolated = curr_isolated - prev_isolated
+    d_boundary = curr_boundary - prev_boundary
+    d_dense = curr_dense - prev_dense
+
+    prev_cluster_count = len(prev_sizes)
+    curr_cluster_count = len(curr_sizes)
+
+    prev_largest_ratio = (max(prev_sizes) / prev_n) if prev_sizes else 0.0
+    curr_largest_ratio = (max(curr_sizes) / curr_n) if curr_sizes else 0.0
+
+    note = "이 변화는 학생 인식 기반 배치 결과의 비교에 따른 구조적 변화 요약이며, 개별 관계의 변화로 단정하지 않습니다."
+
+    change_summary = "이전 회차와 비교할 때, 학급 내 관계 구조에 일부 변화가 관찰됩니다."
+
+    # 우선순위: 고립 변화 > 경계 변화 > 중심 쏠림 변화 > 분산/수렴 > 미미
+    # A: 고립 증가/감소
+    if (d_isolated >= 2) or ((d_isolated / prev_n) >= 0.10):
+        return {
+            "change_summary": change_summary,
+            "change_signal": "고립으로 표시된 학생의 수가 이전 회차보다 증가한 것으로 나타났습니다.",
+            "reflection_prompt": "최근 교내외 활동 변화나 학교생활 경험의 변화가 있었는지 함께 떠올려 보는 것 어떨까요?",
+            "note": note,
+            "rule": "A_isolated_up",
+            "delta": {"dense": d_dense, "boundary": d_boundary, "isolated": d_isolated},
+        }
+
+    if (d_isolated <= -2) or ((d_isolated / prev_n) <= -0.10):
+        return {
+            "change_summary": change_summary,
+            "change_signal": "고립으로 표시된 학생의 수가 이전 회차보다 줄어든 것으로 보입니다.",
+            "reflection_prompt": "이러한 변화가 어떤 경험이나 상호작용과 함께 나타났는지 돌아보는 것도 의미가 있을 수 있습니다.",
+            "note": note,
+            "rule": "A_isolated_down",
+            "delta": {"dense": d_dense, "boundary": d_boundary, "isolated": d_isolated},
+        }
+
+    # B: 경계 증가(너가 고정한 짧은 문장)
+    if (d_boundary >= 3) or ((d_boundary / prev_n) >= 0.15):
+        return {
+            "change_summary": change_summary,
+            "change_signal": "일부 학생들이 특정 관계 집단에 뚜렷하게 속하기보다는 여러 관계 사이에 위치한 모습이 더 많이 나타났습니다.",
+            "reflection_prompt": "최근 교내외 활동 변화가 관계 형성 방식에 어떤 영향을 주었는지 생각해 보는 것도 도움이 될 수 있습니다.",
+            "note": note,
+            "rule": "B_boundary_up",
+            "delta": {"dense": d_dense, "boundary": d_boundary, "isolated": d_isolated},
+        }
+
+    # C: 중심 쏠림 변화
+    if (curr_largest_ratio - prev_largest_ratio) >= 0.15:
+        return {
+            "change_summary": change_summary,
+            "change_signal": "한 관계 중심이 이전 회차보다 더 두드러지게 형성된 것으로 보입니다.",
+            "reflection_prompt": "관계 중심 바깥에 있는 학생들의 참여 경험이 어떻게 변화했는지 한 번 돌아보는 것 어떨까요?",
+            "note": note,
+            "rule": "C_center_up",
+            "delta": {"dense": d_dense, "boundary": d_boundary, "isolated": d_isolated},
+        }
+
+    if (prev_largest_ratio - curr_largest_ratio) >= 0.15:
+        return {
+            "change_summary": change_summary,
+            "change_signal": "관계 중심이 이전 회차보다 완화되며, 구조가 보다 분산된 모습으로 나타났습니다.",
+            "reflection_prompt": "이러한 변화가 어떤 경험과 함께 나타났는지 떠올려 보는 것도 의미가 있을 수 있습니다.",
+            "note": note,
+            "rule": "C_center_down",
+            "delta": {"dense": d_dense, "boundary": d_boundary, "isolated": d_isolated},
+        }
+
+    # D: 집단 수 증가(분산)
+    if curr_cluster_count >= prev_cluster_count + 1:
+        return {
+            "change_summary": change_summary,
+            "change_signal": "관계 구조가 이전 회차보다 여러 흐름으로 분산된 모습이 관찰됩니다.",
+            "reflection_prompt": "집단 간 교류 경험이 어떻게 형성되고 있었는지 떠올려 보는 것 어떨까요?",
+            "note": note,
+            "rule": "D_more_flows",
+            "delta": {"dense": d_dense, "boundary": d_boundary, "isolated": d_isolated},
+        }
+
+    # 미미
+    return {
+        "change_summary": "이전 회차와 비교했을 때, 관계 구조의 큰 변화는 두드러지게 나타나지 않습니다.",
+        "change_signal": "관계 구조의 큰 변화는 두드러지게 나타나지 않습니다.",
+        "reflection_prompt": "현재의 관계 구조가 비교적 안정적으로 유지되고 있는지 지켜보는 것도 의미가 있을 수 있습니다.",
+        "note": note,
+        "rule": "none",
+        "delta": {"dense": d_dense, "boundary": d_boundary, "isolated": d_isolated},
+    }
+
 
 def dbscan_structure_payload(class_code, sid):
     avg = cache_get(class_code, sid, f"student_avg_{sid}") or \
@@ -3691,21 +3910,34 @@ def dbscan_structure_payload(class_code, sid):
             "state": state
         })
 
+    counts = {
+        "n_total": n,
+        "dense": dense,
+        "boundary": boundary,
+        "isolated": isolated,
+        "cluster_sizes": list(clusters.values())
+    }
+
+    teacher_summary = dbscan_teacher_summary(
+        n_total=counts["n_total"],
+        dense_count=counts["dense"],
+        boundary_count=counts["boundary"],
+        isolated_count=counts["isolated"],
+        cluster_sizes=counts["cluster_sizes"],
+    )
+
     return {
         "points": points,
         "fog_points": [p for p in points if p["state"] == "dense"],
-        "counts": {
-            "dense": dense,
-            "boundary": boundary,
-            "isolated": isolated,
-            "cluster_sizes": list(clusters.values())
-        },
+        "counts": counts,
+        "teacher_summary": teacher_summary,
         "params": {
             "epsilon": eps,
             "min_samples": min_samples,
             "standardize": stats
         }
     }
+
 
 
 def kmeans_summary_payload(class_code: str, sid: str, k: int) -> Dict[str, Any]:
@@ -3950,6 +4182,54 @@ def analysis_dbscan_structure(code, sid):
     payload = dbscan_structure_payload(code, sid)
     cache_set(code, sid, cache_key, payload)
     return jsonify(payload)
+
+@app.route("/analysis/class/<code>/dbscan_change.json")
+def analysis_dbscan_change(code):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+
+    prev_sid = (request.args.get("prev") or "1").strip()
+    curr_sid = (request.args.get("curr") or "2").strip()
+
+    valid_sids = ["1", "2", "3", "4", "5"]
+    if prev_sid not in valid_sids:
+        prev_sid = "1"
+    if curr_sid not in valid_sids:
+        curr_sid = "2"
+
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls or cls.get("_forbidden"):
+        return jsonify({"error": "forbidden"}), 403
+
+    # prev payload
+    prev_cache_key = f"dbscan_structure_{prev_sid}"
+    prev_payload = cache_get(code, prev_sid, prev_cache_key)
+    if not prev_payload:
+        prev_payload = dbscan_structure_payload(code, prev_sid)
+        cache_set(code, prev_sid, prev_cache_key, prev_payload)
+
+    # curr payload
+    curr_cache_key = f"dbscan_structure_{curr_sid}"
+    curr_payload = cache_get(code, curr_sid, curr_cache_key)
+    if not curr_payload:
+        curr_payload = dbscan_structure_payload(code, curr_sid)
+        cache_set(code, curr_sid, curr_cache_key, curr_payload)
+
+    prev_counts = prev_payload.get("counts") or {}
+    curr_counts = curr_payload.get("counts") or {}
+
+    change = dbscan_change_summary(prev_counts, curr_counts)
+
+    return jsonify({
+        "class_code": code,
+        "prev_sid": prev_sid,
+        "curr_sid": curr_sid,
+        "prev_counts": prev_counts,
+        "curr_counts": curr_counts,
+        "change": change,
+    })
 
 
 # -------------------------
