@@ -2302,7 +2302,7 @@ def teacher_analysis_compare(code):
     )
 
 
-  @app.route("/teacher/class/<code>/analysis")
+@app.route("/teacher/class/<code>/analysis")
 def teacher_analysis(code):
     if "teacher" not in session:
         return redirect("/teacher/login")
