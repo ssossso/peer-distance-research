@@ -78,13 +78,10 @@
       tdName.appendChild(nm);
 
       const tdGender = document.createElement('td');
-      const g = document.createElement('select');
+      const g = document.createElement('input');
+      g.type = 'text';
       g.className = 'grid-input';
-      g.innerHTML = `
-        <option value="">(미입력)</option>
-        <option value="M">남</option>
-        <option value="F">여</option>
-      `;
+      g.placeholder = '예: 남 / 여';
       tdGender.appendChild(g);
 
       tr.appendChild(tdNo);
@@ -93,6 +90,7 @@
       return tr;
 
     }
+
 
     function initRows(n){
       for(let i=1;i<=n;i++) body.appendChild(makeRow(i));
