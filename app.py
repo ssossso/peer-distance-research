@@ -1935,7 +1935,10 @@ def create_class():
 
         parsed: List[Dict[str, str]] = []
         auto_no = 1
+        line_no = 0
+
         for line in students_raw.splitlines():
+            line_no += 1
             line = line.strip()
             if not line:
                 continue
@@ -1963,8 +1966,13 @@ def create_class():
 
             gender = normalize_gender(gender_raw)
 
+            if gender not in ["남", "여"]:
+                flash(f"{line_no}번째 줄: 성별이 비어있거나 인식되지 않습니다. (남/여) 입력 필요", "error")
+                return redirect(request.path)
+
             parsed.append({"no": str(no or auto_no), "name": name, "gender": gender})
             auto_no += 1
+
 
 
 
