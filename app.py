@@ -1521,10 +1521,38 @@ def inject_globals() -> Dict[str, Any]:
 
 
 def build_student_pin_pdf(class_name: str, sid: str, students):
-      # ---- Lazy imports: prevent whole app from failing if reportlab not installed
+    # ---- Lazy imports: prevent whole app from failing if reportlab not installed
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.pdfgen import canvas
     from reportlab.pdfbase.pdfmetrics import stringWidth
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+
+    # ---- Font (Korean) setup
+    # Put font file at: static/fonts/NotoSansKR-Regular.ttf
+    FONT_REG = "NotoSansKR"
+    FONT_BOLD = "NotoSansKR-Bold"  # optional; if you don't have bold file, we'll reuse regular
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    font_path = os.path.join(base_dir, "static", "fonts", "NotoSansKR-Regular.ttf")
+    bold_path = os.path.join(base_dir, "static", "fonts", "NotoSansKR-Bold.ttf")
+
+    # Register once (safe even if called multiple times)
+    try:
+        if FONT_REG not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(FONT_REG, font_path))
+        if os.path.exists(bold_path) and (FONT_BOLD not in pdfmetrics.getRegisteredFontNames()):
+            pdfmetrics.registerFont(TTFont(FONT_BOLD, bold_path))
+        has_korean_font = True
+    except Exception:
+        # Fallback: Helvetica (will show □ for Korean, but prevents crash)
+        has_korean_font = False
+
+    # Choose fonts for use below
+    F_REG = FONT_REG if has_korean_font else "Helvetica"
+    F_BOLD = (FONT_BOLD if (has_korean_font and os.path.exists(bold_path)) else F_REG) if has_korean_font else "Helvetica-Bold"
+
 
     buf = BytesIO()
     page_w, page_h = landscape(A4)
@@ -1575,14 +1603,14 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
 
         # ---- Name (horizontal)
         name_text = (name or "").strip()
-        c.setFont("Helvetica-Bold", name_fs)
+        c.setFont(F_BOLD, name_fs)
 
         max_w = cell_w * 0.90
-        if stringWidth(name_text, "Helvetica-Bold", name_fs) > max_w:
+        if stringWidth(name_text, F_BOLD, name_fs) > max_w:
             fs = name_fs
             while fs > 12 and stringWidth(name_text, "Helvetica-Bold", fs) > max_w:
                 fs -= 1
-            c.setFont("Helvetica-Bold", fs)
+            c.setFont(F_BOLD, fs)
 
         name_y = y0 + cell_h * 0.70
         c.drawCentredString((x0 + x1) / 2, name_y, name_text)
@@ -1596,7 +1624,7 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
         c.saveState()
         c.translate(cx, cy)
         c.rotate(90)
-        c.setFont("Helvetica-Bold", pin_fs)
+        c.setFont(F_BOLD, pin_fs)
 
         text_w = stringWidth(pin, "Helvetica-Bold", pin_fs)
         c.drawString(-text_w / 2, 0, pin)
@@ -1609,16 +1637,16 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
 
     def draw_header():
         # Title
-        c.setFont("Helvetica-Bold", title_fs)
+        c.setFont(F_BOLD, title_fs)
         c.drawCentredString(page_w / 2, page_h - margin_top - 6, "<우리반 관계 지도>")
 
         # Class + SID + Date
-        c.setFont("Helvetica", meta_fs)
+        c.setFont(F_BOLD, meta_fs)
         meta_line = f"{class_name}  |  {sid}회차  |  {date_str}"
         c.drawCentredString(page_w / 2, page_h - margin_top - 42, meta_line)
 
         # Sub label
-        c.setFont("Helvetica-Bold", sub_fs)
+        c.setFont(F_BOLD, sub_fs)
         c.drawCentredString(page_w / 2, page_h - margin_top - 70, "학생 로그인 PIN 코드")
 
     # Defensive cleanup + stable order
