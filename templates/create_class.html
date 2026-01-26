@@ -3,7 +3,8 @@
 <div class="card">
   <h2>학급 생성</h2>
   <form method="post">
-    학급 이름<br><input name="class_name" placeholder="예: 2026학년도 6학년 1반"><br><br>
+    학급 이름<br>
+    <input name="class_name" placeholder="예: 2026학년도 6학년 1반"><br><br>
 
     학생 명단(엑셀이나 구글시트에서 붙여넣기)<br>
     <div style="text-align:left; margin-top:8px;">
@@ -26,11 +27,11 @@
             <tr>
               <th style="width:90px;">번호</th>
               <th>이름</th>
-              <th style="width:120px;">성별(선택)</th>
+              <th style="width:120px;">성별</th>
             </tr>
           </thead>
           <tbody id="studentGridBody">
-            <!-- JS로 기본 20줄을 생성합니다 -->
+            <!-- JS로 기본 20줄 생성 -->
           </tbody>
         </table>
       </div>
@@ -41,11 +42,11 @@
 
       <div class="hint">
         - 기본으로 20줄(20명)을 제공합니다. 더 필요하면 “줄(학생) 추가”를 누르세요.<br>
-        - <b>이름이 비어있는 줄</b>은 자동으로 제외되어 학생 명단에 들어가지 않습니다.
+        - <b>이름이 비어있는 줄</b>은 자동으로 제외됩니다.<br>
       </div>
     </div>
 
-    <!-- 서버로 보낼 실제 값: "번호\t이름" 줄바꿈 형태로 전달 -->
+    <!-- 서버로 전달되는 값 -->
     <textarea name="students" id="students_hidden" style="display:none;"></textarea>
 
     <br>
@@ -54,161 +55,140 @@
 </div>
 
 <script>
-  (function(){
-    const body = document.getElementById('studentGridBody');
-    const addRowBtn = document.getElementById('addRowBtn');
-    const hidden = document.getElementById('students_hidden');
+(function(){
+  const body = document.getElementById('studentGridBody');
+  const addRowBtn = document.getElementById('addRowBtn');
+  const hidden = document.getElementById('students_hidden');
+  const formEl = document.querySelector('form');
 
-    function makeRow(idx){
-      const tr = document.createElement('tr');
+  function makeRow(idx){
+    const tr = document.createElement('tr');
 
-      const tdNo = document.createElement('td');
-      const no = document.createElement('input');
-      no.type = 'text';
-      no.className = 'grid-input';
-      no.value = String(idx);
-      no.placeholder = '예: 1';
-      tdNo.appendChild(no);
+    const tdNo = document.createElement('td');
+    const no = document.createElement('input');
+    no.type = 'text';
+    no.className = 'grid-input';
+    no.value = String(idx);
+    no.placeholder = '예: 1';
+    tdNo.appendChild(no);
 
-      const tdName = document.createElement('td');
-      const nm = document.createElement('input');
-      nm.type = 'text';
-      nm.className = 'grid-input';
-      nm.placeholder = '예: 홍길동';
-      tdName.appendChild(nm);
+    const tdName = document.createElement('td');
+    const nm = document.createElement('input');
+    nm.type = 'text';
+    nm.className = 'grid-input';
+    nm.placeholder = '예: 홍길동';
+    tdName.appendChild(nm);
 
-      const tdGender = document.createElement('td');
-      const g = document.createElement('input');
-      g.type = 'text';
-      g.className = 'grid-input';
-      g.placeholder = '예: 남 또는 여 (필수)';
-      g.required = true;
-      tdGender.appendChild(g);
+    const tdGender = document.createElement('td');
+    const g = document.createElement('input');
+    g.type = 'text';
+    g.className = 'grid-input';
+    g.placeholder = '예: 남 / 여';
+    tdGender.appendChild(g);
 
-      tr.appendChild(tdNo);
-      tr.appendChild(tdName);
-      tr.appendChild(tdGender);
-      return tr;
+    tr.appendChild(tdNo);
+    tr.appendChild(tdName);
+    tr.appendChild(tdGender);
+    return tr;
+  }
 
-    }
+  function initRows(n){
+    for(let i=1;i<=n;i++) body.appendChild(makeRow(i));
+  }
 
+  function serializeStudents(){
+    const lines = [];
+    const rows = body.querySelectorAll('tr');
 
+    for(let idx = 0; idx < rows.length; idx++){
+      const inputs = rows[idx].querySelectorAll('input');
 
-    function initRows(n){
-      for(let i=1;i<=n;i++) body.appendChild(makeRow(i));
-    }
+      const noInput = inputs[0];
+      const nameInput = inputs[1];
+      const genderInput = inputs[2];
 
-    function serializeStudents(){
-      const lines = [];
-      const rows = body.querySelectorAll('tr');
+      const name = (nameInput.value || '').trim();
+      if(!name) continue;
 
-      for(let idx = 0; idx < rows.length; idx++){
-        const r = rows[idx];
-        const inputs = r.querySelectorAll('input');
+      let no = (noInput.value || '').trim();
+      if(!no) no = String(idx + 1);
 
-        const noInput = inputs[0];
-        const nameInput = inputs[1];
-        const genderInput = inputs[2];
-
-        const name = (nameInput?.value || '').trim();
-        if(!name) continue;
-
-        let no = (noInput?.value || '').trim();
-        if(!no) no = String(idx + 1);
-
-        const gender = (genderInput?.value || '').trim();
-
-        if(!gender){
-          genderInput.focus();
-          alert(`${idx + 1}번째 줄: 성별이 비어 있어요. (남/여)`);
-          throw new Error("gender_required");
-        }
-
-        lines.push(`${no}\t${name}\t${gender}`);
+      const gender = (genderInput.value || '').trim();
+      if(!gender){
+        genderInput.focus();
+        alert(`${idx + 1}번째 줄: 성별이 입력되지 않았습니다. (남 / 여)`);
+        throw new Error("gender_required");
       }
 
-      hidden.value = lines.join('\n');
+      lines.push(`${no}\t${name}\t${gender}`);
     }
 
-    const formEl = document.querySelector('form');
-    if(formEl){
-      formEl.addEventListener('submit', (e) => {
-        try{
-          serializeStudents();
-        }catch(err){
-          e.preventDefault();
-          return;
-        }
-      });
-    }
+    hidden.value = lines.join('\n');
+  }
 
+  if(formEl){
+    formEl.addEventListener('submit', (e) => {
+      try{
+        serializeStudents();
+      }catch(err){
+        e.preventDefault();
+      }
+    });
+  }
 
-    initRows(20);
+  initRows(20);
 
-    addRowBtn.addEventListener('click', () => {
+  addRowBtn.addEventListener('click', () => {
+    const nextIdx = body.querySelectorAll('tr').length + 1;
+    body.appendChild(makeRow(nextIdx));
+  });
+
+  // 엑셀 / 구글시트 / 한글 표 복붙 지원
+  body.addEventListener('paste', (e) => {
+    const target = e.target;
+    if(!(target instanceof HTMLInputElement)) return;
+
+    const tr = target.closest('tr');
+    if(!tr) return;
+
+    const rows = Array.from(body.querySelectorAll('tr'));
+    const rowIndex = rows.indexOf(tr);
+    if(rowIndex < 0) return;
+
+    const inputs = Array.from(tr.querySelectorAll('input'));
+    const colIndex = inputs.indexOf(target);
+    if(colIndex < 0) return;
+
+    const text = (e.clipboardData || window.clipboardData)?.getData('text');
+    if(!text) return;
+
+    const lines = text.replace(/\r/g, '').split('\n').filter(Boolean);
+    if(lines.length === 0) return;
+
+    e.preventDefault();
+
+    while(body.querySelectorAll('tr').length < rowIndex + lines.length){
       const nextIdx = body.querySelectorAll('tr').length + 1;
       body.appendChild(makeRow(nextIdx));
-    });
+    }
 
-    // 제출 직전에 번호+이름을 모아서 전송
-    const form = addRowBtn.closest('form');
-    form.addEventListener('submit', () => {
-      serializeStudents();
-    });
+    lines.forEach((line, rOffset) => {
+      const cols = line.split('\t');
+      const row = body.querySelectorAll('tr')[rowIndex + rOffset];
+      const rowInputs = row.querySelectorAll('input');
 
-    // 엑셀/구글시트 복붙 지원
-    // - 탭(열) + 줄바꿈(행) 형태를 읽어서 현재 선택한 칸부터 채웁니다.
-    // - 필요한 경우 자동으로 행을 추가합니다.
-    body.addEventListener('paste', (e) => {
-      const target = e.target;
-      if(!(target instanceof HTMLInputElement)) return;
-
-      const tr = target.closest('tr');
-      if(!tr) return;
-
-      const allRows = Array.from(body.querySelectorAll('tr'));
-      const rowIndex = allRows.indexOf(tr);
-      if(rowIndex < 0) return;
-
-      const inputs = Array.from(tr.querySelectorAll('input'));
-      const colIndex = inputs.indexOf(target); // 0: 번호, 1: 이름, 2: 성별
-      if(colIndex < 0) return;
-
-      const text = (e.clipboardData || window.clipboardData)?.getData('text');
-      if(!text) return;
-
-      const lines = text.replace(/\r/g, '').split('\n').filter(l => l !== '');
-      if(lines.length === 0) return;
-
-      e.preventDefault();
-
-      // 필요하면 행을 늘림
-      const need = rowIndex + lines.length;
-      while(body.querySelectorAll('tr').length < need){
-        const nextIdx = body.querySelectorAll('tr').length + 1;
-        body.appendChild(makeRow(nextIdx));
+      if(cols.length >= 3){
+        rowInputs[0].value = cols[0].trim();
+        rowInputs[1].value = cols[1].trim();
+        rowInputs[2].value = cols[2].trim();
+      } else if(cols.length === 2){
+        rowInputs[0].value = cols[0].trim();
+        rowInputs[1].value = cols[1].trim();
+      } else {
+        rowInputs[colIndex].value = cols[0].trim();
       }
-
-      lines.forEach((line, rOffset) => {
-        const cols = line.split('\t');
-        const row = body.querySelectorAll('tr')[rowIndex + rOffset];
-        const rowInputs = row.querySelectorAll('input');
-
-        if(cols.length >= 3){
-          // 3열 이상(번호+이름+성별)
-          rowInputs[0].value = (cols[0] || '').trim();
-          rowInputs[1].value = (cols[1] || '').trim();
-          rowInputs[2].value = (cols[2] || '').trim();
-        } else if(cols.length === 2){
-          // 2열(번호+이름)
-          rowInputs[0].value = (cols[0] || '').trim();
-          rowInputs[1].value = (cols[1] || '').trim();
-        } else {
-          // 1열만 붙여넣은 경우: 시작한 칸(번호/이름/성별)에만 채움
-          rowInputs[colIndex].value = (cols[0] || '').trim();
-        }
-      });
     });
-  })();
+  });
+})();
 </script>
 {% endblock %}
