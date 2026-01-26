@@ -1143,26 +1143,94 @@ def db_upsert_student_session(class_code: str, student_name: str, sid: str, plac
     placements_str = json.dumps(placements, ensure_ascii=False)
 
     with engine.begin() as conn:
-        row = conn.execute(text("""
-            SELECT id
-            FROM student_sessions
-            WHERE class_code = :code AND student_name = :name AND sid = :sid
+        # 운영 DB 스키마가 서로 다를 수 있어 session_id 컬럼 존재 여부를 확인한다.
+        has_session_id = conn.execute(text("""
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'student_sessions' AND column_name = 'session_id'
             LIMIT 1
-        """), {"code": class_code, "name": student_name, "sid": sid}).fetchone()
+        """)).fetchone() is not None
+
+        # 기존 데이터가 sid가 비어 있고 session_id만 있는 경우도 대비해서 조회 조건을 확장한다.
+        if has_session_id:
+            row = conn.execute(text("""
+                SELECT id
+                FROM student_sessions
+                WHERE class_code = :code
+                  AND student_name = :name
+                  AND (sid = :sid OR session_id = CAST(:sid AS INTEGER))
+                LIMIT 1
+            """), {"code": class_code, "name": student_name, "sid": sid}).fetchone()
+        else:
+            row = conn.execute(text("""
+                SELECT id
+                FROM student_sessions
+                WHERE class_code = :code AND student_name = :name AND sid = :sid
+                LIMIT 1
+            """), {"code": class_code, "name": student_name, "sid": sid}).fetchone()
 
         if row:
-            conn.execute(text("""
-                UPDATE student_sessions
-                SET placements = CAST(:placements AS jsonb),
-                    placements_json = :placements_json,
-                    submitted = :submitted
-                WHERE id = :id
-            """), {"placements": placements_str, "placements_json": placements_str, "submitted": submitted, "id": row.id})
+            if has_session_id:
+                conn.execute(text("""
+                    UPDATE student_sessions
+                    SET sid = :sid,
+                        session_id = CAST(:sid AS INTEGER),
+                        placements = CAST(:placements AS jsonb),
+                        placements_json = :placements_json,
+                        submitted = :submitted
+                    WHERE id = :id
+                """), {
+                    "sid": sid,
+                    "placements": placements_str,
+                    "placements_json": placements_str,
+                    "submitted": submitted,
+                    "id": row.id
+                })
+            else:
+                conn.execute(text("""
+                    UPDATE student_sessions
+                    SET placements = CAST(:placements AS jsonb),
+                        placements_json = :placements_json,
+                        submitted = :submitted
+                    WHERE id = :id
+                """), {
+                    "placements": placements_str,
+                    "placements_json": placements_str,
+                    "submitted": submitted,
+                    "id": row.id
+                })
         else:
-            conn.execute(text("""
-                INSERT INTO student_sessions (class_code, sid, student_name, placements, placements_json, submitted)
-                VALUES (:code, :sid, :name, CAST(:placements AS jsonb), :placements_json, :submitted)
-            """), {"code": class_code, "sid": sid, "name": student_name, "placements": placements_str, "placements_json": placements_str, "submitted": submitted})
+            if has_session_id:
+                conn.execute(text("""
+                    INSERT INTO student_sessions (
+                        class_code, sid, session_id, student_name,
+                        placements, placements_json, submitted
+                    )
+                    VALUES (
+                        :code, :sid, CAST(:sid AS INTEGER), :name,
+                        CAST(:placements AS jsonb), :placements_json, :submitted
+                    )
+                """), {
+                    "code": class_code,
+                    "sid": sid,
+                    "name": student_name,
+                    "placements": placements_str,
+                    "placements_json": placements_str,
+                    "submitted": submitted
+                })
+            else:
+                conn.execute(text("""
+                    INSERT INTO student_sessions (class_code, sid, student_name, placements, placements_json, submitted)
+                    VALUES (:code, :sid, :name, CAST(:placements AS jsonb), :placements_json, :submitted)
+                """), {
+                    "code": class_code,
+                    "sid": sid,
+                    "name": student_name,
+                    "placements": placements_str,
+                    "placements_json": placements_str,
+                    "submitted": submitted
+                })
+
 
 def sync_results_from_sheet_to_db(class_code: str, sid: str, teacher_username: str) -> Dict[str, int]:
     """
