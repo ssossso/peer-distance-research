@@ -2,18 +2,25 @@
 {% block content %}
 
 <style>
-  /* ===== teacher signup research box responsive ===== */
-  .research-stack{
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-  }
-
-  .research-label{
-    font-size:13px;
-    font-weight:500; /* 얇게 */
+  /* ===== 공통 라벨: 전부 같은 글씨체/크기 ===== */
+  .form-label{
+    font-size:14px;
+    font-weight:500;
     color:#111827;
     margin:0 0 6px 0;
+  }
+
+  .field{
+    margin-bottom:14px;
+  }
+
+  /* ===== 연구용(정보) 박스 ===== */
+  .research-outer{
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    background:#fafafa;
+    padding:14px;
+    margin-bottom:14px;
   }
 
   .research-box{
@@ -23,25 +30,46 @@
     padding:12px;
   }
 
-  .radio-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    align-items: center;
+  .research-stack{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
   }
 
-  .radio-row label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
-    white-space: nowrap;
+  /* 라디오 선택지: 가운데 정렬 */
+  .radio-row{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:center; /* (요청4) 가운데 정렬 */
+  }
+
+  .radio-row label{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin:0;
+    white-space:nowrap;
     font-weight:400;
   }
 
-  .thin-label{
-    font-weight:500; /* 기존 800 -> 얇게 */
-    margin-bottom:6px;
+  /* ===== 비밀번호 눈 아이콘 위치 고정(입력칸 기준) ===== */
+  .pw-wrap{ position:relative; width:100%; }
+  .pw-input-in{ padding-right:44px; }
+  .pw-in-toggle{
+    position:absolute;
+    top:50%;
+    right:10px;
+    transform:translateY(-50%);
+    width:28px;
+    height:28px;
+    padding:0;
+    border:none;
+    background:transparent;
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
 </style>
 
@@ -50,44 +78,112 @@
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
   <form method="post">
-    아이디<br>
-    <input name="username" autocomplete="username"><br><br>
 
-    비밀번호<br>
-    <div class="pw-wrap">
-      <input id="pwInput" type="password" name="password"
-             autocomplete="new-password" class="pw-input-in">
-      <button id="pwToggleBtn" class="pw-in-toggle" type="button">👁</button>
-    </div><br>
+    <!-- 아이디 -->
+    <div class="field">
+      <div class="form-label">아이디</div>
+      <input name="username" autocomplete="username">
+    </div>
 
-    비밀번호 확인<br>
-    <div class="pw-wrap">
-      <input id="pw2Input" type="password" name="password2"
-             autocomplete="new-password" class="pw-input-in">
-      <button id="pw2ToggleBtn" class="pw-in-toggle" type="button">👁</button>
+    <!-- 비밀번호 -->
+    <div class="field">
+      <div class="form-label">비밀번호</div>
+      <div class="pw-wrap">
+        <input id="pwInput" type="password" name="password"
+               autocomplete="new-password" class="pw-input-in">
+        <button id="pwToggleBtn" class="pw-in-toggle" type="button"
+                aria-label="비밀번호 표시 전환" aria-pressed="false">
+          <span id="eyeOn" class="eye-icon is-active" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span id="eyeOff" class="eye-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M10.58 10.58A3 3 0 0 0 12 15a3 3 0 0 0 2.42-4.42"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9.88 5.09A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a19.13 19.13 0 0 1-3.13 4.36"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6.61 6.61C3.27 9.25 2 12 2 12s3.5 7 10 7c1.09 0 2.12-.17 3.08-.49"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 비밀번호 확인 -->
+    <div class="field">
+      <div class="form-label">비밀번호 확인</div>
+      <div class="pw-wrap">
+        <input id="pw2Input" type="password" name="password2"
+               autocomplete="new-password" class="pw-input-in">
+        <button id="pw2ToggleBtn" class="pw-in-toggle" type="button"
+                aria-label="비밀번호 확인 표시 전환" aria-pressed="false">
+          <span id="eye2On" class="eye-icon is-active" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span id="eye2Off" class="eye-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M10.58 10.58A3 3 0 0 0 12 15a3 3 0 0 0 2.42-4.42"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9.88 5.09A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a19.13 19.13 0 0 1-3.13 4.36"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6.61 6.61C3.27 9.25 2 12 2 12s3.5 7 10 7c1.09 0 2.12-.17 3.08-.49"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </button>
+      </div>
     </div>
 
     <hr style="margin:18px 0; border:none; border-top:1px solid #e5e7eb;">
 
     <!-- 연구용 정보 전체 박스 -->
-    <div style="border:1px solid #e5e7eb; border-radius:14px;
-                background:#fafafa; padding:14px; margin-bottom:14px;">
+    <div class="research-outer">
 
-      <!-- (1) 텍스트 교체 -->
-      <div style="font-size:12px; font-weight:700; color:#6b7280;
-                  line-height:1.45; margin-bottom:12px;">
+      <div style="font-size:12px; font-weight:700; color:#6b7280; line-height:1.45; margin-bottom:12px;">
         이건 소히가 논문에 써 먹으려고 수집하는 정보입니당 &gt;&lt;<br>
         실제 논문에서는 모두 익명화됩니다.<br>
         도움을 주셔서 정말 감사합니다💙
       </div>
 
-      <!-- (2) 교직경력 / 담당학년: 위아래(세로) 정렬 + 라벨 얇게 + 라벨을 박스 위로 -->
-      <div class="research-stack">
+      <!-- (요청2,3) 이름/학교/교직경력/담당학년을 같은 박스 영역에, 순서 재정렬 -->
+      <div class="research-box">
+        <div class="research-stack">
 
-        <!-- 교직경력 -->
-        <div>
-          <div class="research-label">나의 교직경력은?</div>
-          <div class="research-box">
+          <!-- 이름 -->
+          <div>
+            <div class="form-label">이름</div>
+            <div style="font-size:12px; font-weight:500; color:#6b7280; line-height:1.35; margin:-2px 0 8px 0;">
+              실명, 연구 끝나고 인터뷰 요청할 때 데이터 매칭 용도로 사용합니다. 소히가 알아볼 수 있는 별명도 괜차나
+            </div>
+            <input name="research_name" required>
+          </div>
+
+          <!-- 학교 -->
+          <div>
+            <div class="form-label">학교</div>
+            <input name="research_school" required>
+          </div>
+
+          <!-- 교직경력 -->
+          <div>
+            <div class="form-label">나의 교직경력은?</div>
             <div class="radio-row">
               <label><input type="radio" name="teaching_years" value="1-5" required>1–5년</label>
               <label><input type="radio" name="teaching_years" value="6-10">6–10년</label>
@@ -95,38 +191,19 @@
               <label><input type="radio" name="teaching_years" value="16+">16년+</label>
             </div>
           </div>
-        </div>
 
-        <!-- 담당 학년 -->
-        <div>
-          <div class="research-label">현재 담당 학년은?</div>
-          <div class="research-box">
+          <!-- 담당학년 -->
+          <div>
+            <div class="form-label">현재 담당 학년은?</div>
             <div class="radio-row">
               <label><input type="radio" name="current_grade" value="4" required>4학년</label>
               <label><input type="radio" name="current_grade" value="5">5학년</label>
               <label><input type="radio" name="current_grade" value="6">6학년</label>
             </div>
           </div>
-        </div>
 
-      </div>
-    </div>
-
-    <!-- (3) 이름 -->
-    <div style="margin-bottom:14px;">
-      <div class="thin-label">
-        이름
-        <div style="font-size:12px; font-weight:500; color:#6b7280;">
-          인터뷰 매칭용 (실명 또는 별명 가능)
         </div>
       </div>
-      <input name="research_name" required>
-    </div>
-
-    <!-- (3) 학교 -->
-    <div style="margin-bottom:14px;">
-      <div class="thin-label">학교</div>
-      <input name="research_school" required>
     </div>
 
     <button>회원가입</button>
