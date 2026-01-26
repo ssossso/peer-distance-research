@@ -3,16 +3,24 @@
 
 <style>
   /* ===== teacher signup research box responsive ===== */
-  .research-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+  .research-stack{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
   }
 
-  @media (max-width: 600px) {
-    .research-grid {
-      grid-template-columns: 1fr;
-    }
+  .research-label{
+    font-size:13px;
+    font-weight:500; /* 얇게 */
+    color:#111827;
+    margin:0 0 6px 0;
+  }
+
+  .research-box{
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    background:#fff;
+    padding:12px;
   }
 
   .radio-row {
@@ -28,6 +36,12 @@
     gap: 6px;
     margin: 0;
     white-space: nowrap;
+    font-weight:400;
+  }
+
+  .thin-label{
+    font-weight:500; /* 기존 800 -> 얇게 */
+    margin-bottom:6px;
   }
 </style>
 
@@ -59,56 +73,59 @@
     <div style="border:1px solid #e5e7eb; border-radius:14px;
                 background:#fafafa; padding:14px; margin-bottom:14px;">
 
+      <!-- (1) 텍스트 교체 -->
       <div style="font-size:12px; font-weight:700; color:#6b7280;
                   line-height:1.45; margin-bottom:12px;">
         이건 소히가 논문에 써 먹으려고 수집하는 정보입니당 &gt;&lt;<br>
         실제 논문에서는 모두 익명화됩니다.<br>
-        연구에 참여해주셔서 정말 감사합니다 💙
+        도움을 주셔서 정말 감사합니다💙
       </div>
 
-      <!-- 교직경력 / 담당학년 -->
-      <div class="research-grid">
+      <!-- (2) 교직경력 / 담당학년: 위아래(세로) 정렬 + 라벨 얇게 + 라벨을 박스 위로 -->
+      <div class="research-stack">
 
         <!-- 교직경력 -->
-        <div style="border:1px solid #e5e7eb; border-radius:12px;
-                    background:#fff; padding:12px;">
-          <div style="font-weight:800; margin-bottom:8px;">나의 교직경력은?</div>
-          <div class="radio-row">
-            <label><input type="radio" name="teaching_years" value="1-5" required>1–5년</label>
-            <label><input type="radio" name="teaching_years" value="6-10">6–10년</label>
-            <label><input type="radio" name="teaching_years" value="11-15">11–15년</label>
-            <label><input type="radio" name="teaching_years" value="16+">16년+</label>
+        <div>
+          <div class="research-label">나의 교직경력은?</div>
+          <div class="research-box">
+            <div class="radio-row">
+              <label><input type="radio" name="teaching_years" value="1-5" required>1–5년</label>
+              <label><input type="radio" name="teaching_years" value="6-10">6–10년</label>
+              <label><input type="radio" name="teaching_years" value="11-15">11–15년</label>
+              <label><input type="radio" name="teaching_years" value="16+">16년+</label>
+            </div>
           </div>
         </div>
 
         <!-- 담당 학년 -->
-        <div style="border:1px solid #e5e7eb; border-radius:12px;
-                    background:#fff; padding:12px;">
-          <div style="font-weight:800; margin-bottom:8px;">현재 담당 학년은?</div>
-          <div class="radio-row">
-            <label><input type="radio" name="current_grade" value="4" required>4학년</label>
-            <label><input type="radio" name="current_grade" value="5">5학년</label>
-            <label><input type="radio" name="current_grade" value="6">6학년</label>
+        <div>
+          <div class="research-label">현재 담당 학년은?</div>
+          <div class="research-box">
+            <div class="radio-row">
+              <label><input type="radio" name="current_grade" value="4" required>4학년</label>
+              <label><input type="radio" name="current_grade" value="5">5학년</label>
+              <label><input type="radio" name="current_grade" value="6">6학년</label>
+            </div>
           </div>
         </div>
 
       </div>
     </div>
 
-    <!-- 이름 -->
+    <!-- (3) 이름 -->
     <div style="margin-bottom:14px;">
-      <div style="font-weight:800; margin-bottom:6px;">
+      <div class="thin-label">
         이름
-        <div style="font-size:12px; font-weight:700; color:#6b7280;">
+        <div style="font-size:12px; font-weight:500; color:#6b7280;">
           인터뷰 매칭용 (실명 또는 별명 가능)
         </div>
       </div>
       <input name="research_name" required>
     </div>
 
-    <!-- 학교 -->
+    <!-- (3) 학교 -->
     <div style="margin-bottom:14px;">
-      <div style="font-weight:800; margin-bottom:6px;">학교</div>
+      <div class="thin-label">학교</div>
       <input name="research_school" required>
     </div>
 
