@@ -894,12 +894,17 @@ def db_get_session_state_v2(class_code: str, sid: str, teacher_username: str) ->
             WHERE class_code = :code AND session_id = :sid
         """), {"code": class_code, "sid": sid}).fetchone()
 
-        exc_rows = conn.execute(text("""
-            SELECT student_name, excluded, reason
-            FROM session_exclusions
-            WHERE class_code = :code AND session_id = :sid
-            ORDER BY student_name
-        """), {"code": class_code, "sid": sid}).fetchall()
+        try:
+            exc_rows = conn.execute(text("""
+                SELECT student_name, excluded, reason
+                FROM session_exclusions
+                WHERE class_code = :code AND session_id = :sid
+                ORDER BY student_name
+            """), {"code": class_code, "sid": sid}).fetchall()
+        except Exception:
+            # session_exclusions 테이블이 아직 없으면(초기/마이그레이션 누락) 빈 목록으로 처리
+            exc_rows = []
+
 
         survey_row = conn.execute(text("""
             SELECT 1 AS ok
