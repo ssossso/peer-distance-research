@@ -65,7 +65,8 @@
             </span>
           </div>
 
-          <div id="k_status" style="margin-top:10px; color:#6b7280; font-weight:800;">대기 중</div>
+          <div id="k_status" style="margin-top:10px; color:#6b7280; font-weight:800;"></div>
+          <div id="k_summary_sentence" style="margin-top:6px; font-weight:900;"></div>
 
           <div id="k_result" style="margin-top:10px; display:grid; grid-template-columns:1fr; gap:8px;">
             <!-- 결과 카드가 들어옴 -->
@@ -270,7 +271,12 @@
       return;
     }
 
-    kStatus.textContent = `요약 완료 (집단 개수: ${payload.k || groups.length})`;
+    const kSummary = document.getElementById("k_summary_sentence");
+    
+    kStatus.textContent = "";
+    kSummary.textContent = `이번 회차에서 학생 관계는 ${payload.k}개의 관계 집단으로 요약될 수 있습니다. 다만 이 요약은 관계를 단순화하는 과정에서 일부 세부적인 차이가 줄어들 수 있으므로,
+관계 해석은 위의 구조를 우선하여 살펴보는 것을 추천합니다.”`;
+    
     kResult.innerHTML = "";
 
     for(const g of groups){
