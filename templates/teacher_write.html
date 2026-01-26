@@ -72,25 +72,18 @@
           {% if run.submitted %}
             <button type="button" disabled style="flex:1; opacity:0.6;">마무리 완료</button>
           {% elif readonly %}
-            <a class="btn" href="/teacher/placement/{{ run.id }}/complete"
-               style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
-              마무리 단계로 이동
-            </a>
             <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
                style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
-              배치 수정하기
+              배치 수정
+            </a>
+            <a class="btn" href="/teacher/placement/{{ run.id }}/complete"
+               style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+              다음 단계
             </a>
           {% else %}
             <button type="submit" style="flex:1;">배치 저장</button>
           {% endif %}
         </div>
-
-
-        {% if not run.submitted %}
-          <div class="muted" style="margin-top:10px; font-size:12px;">
-            저장 후 다음 단계에서 <b>확신도/개입 우선순위</b>를 기록합니다.
-          </div>
-        {% endif %}
       </div>
     </div>
   </form>
