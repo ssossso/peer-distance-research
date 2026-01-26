@@ -2278,6 +2278,30 @@ def class_detail_v2(code):
             open_panel=open_panel,
         )
 
+@app.route("/teacher/class/<code>/analysis_compare")
+def teacher_analysis_compare(code):
+    if "teacher" not in session:
+        return redirect("/teacher/login")
+
+    code = (code or "").upper().strip()
+
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls or cls.get("_forbidden"):
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+
+    cls = ensure_class_schema(cls)
+
+    # v2 기본 운영: 1~4차
+    sids = ["1", "2", "3", "4"]
+
+    return render_template(
+        "teacher_analysis_compare.html",
+        cls=cls,
+        code=code,
+        sids=sids,
+    )
+
+
   @app.route("/teacher/class/<code>/analysis")
 def teacher_analysis(code):
     if "teacher" not in session:
