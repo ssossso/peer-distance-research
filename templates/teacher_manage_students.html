@@ -14,8 +14,8 @@
       <input name="name" placeholder="이름" style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
       <select name="gender" style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db;">
         <option value="">성별(미입력)</option>
-        <option value="M">남</option>
-        <option value="F">여</option>
+        <option value="남">남</option>
+        <option value="여">여</option>
       </select>
       <button type="submit">추가</button>
     </form>
@@ -48,8 +48,8 @@
               <select name="gender" onchange="this.form.submit()"
                       style="padding:6px 8px; border-radius:10px; border:1px solid #d1d5db;">
                 <option value="" {% if s.gender=="" %}selected{% endif %}>(미입력)</option>
-                <option value="M" {% if s.gender=="M" %}selected{% endif %}>남</option>
-                <option value="F" {% if s.gender=="F" %}selected{% endif %}>여</option>
+                <option value="남" {% if s.gender=="남" %}selected{% endif %}>남</option>
+                <option value="여" {% if s.gender=="여" %}selected{% endif %}>여</option>
               </select>
             </form>
           </td>
