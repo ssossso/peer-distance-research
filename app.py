@@ -3300,19 +3300,17 @@ def teacher_placement_start(code):
     if sid not in ["1", "2", "3", "4", "5"]:
         sid = "1"
 
-    # ✅ 새로 시작 강제 옵션: ?new=1
+    # ✅ 새로 작성(덮어쓰기 시작)은 ?new=1 로만 한다
     force_new = (request.args.get("new") or "").strip() == "1"
 
-    # ✅ 1) 기존 run(해당 teacher/class/sid) 중 최신을 먼저 찾는다
+    # ✅ 1) 기본은 "최신 run으로 재진입" (submitted여부와 무관)
+    #    - 저장 후 다시 들어왔을 때, 이전 배치가 보이게 하는 핵심
     if not force_new:
         latest_id = db_get_latest_teacher_run_id(code, session["teacher"], sid)
         if latest_id:
-            latest = db_get_teacher_run(latest_id)
-            # ✅ 미제출이면: 저장된 placements 그대로 이어서 편집 화면으로
-            if latest and (not latest.get("submitted")):
-                return redirect(f"/teacher/placement/{latest_id}")
+            return redirect(f"/teacher/placement/{latest_id}")
 
-    # ✅ 2) 없으면 새 run 생성
+    # ✅ 2) 기존 run이 없거나, new=1이면 새 run 생성
     condition = (request.args.get("condition") or "BASELINE").strip()
     if condition not in ["BASELINE", "TOOL_ASSISTED"]:
         condition = "BASELINE"
@@ -3322,6 +3320,7 @@ def teacher_placement_start(code):
 
     run_id = db_create_teacher_run(code, session["teacher"], sid, condition, tool_run_id=tool_run_id_val)
     return redirect(f"/teacher/placement/{run_id}")
+
 
 
 
