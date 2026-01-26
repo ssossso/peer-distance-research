@@ -1608,7 +1608,7 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
         max_w = cell_w * 0.90
         if stringWidth(name_text, F_BOLD, name_fs) > max_w:
             fs = name_fs
-            while fs > 12 and stringWidth(name_text, "Helvetica-Bold", fs) > max_w:
+            while fs > 12 and stringWidth(name_text, F_BOLD, fs) > max_w:
                 fs -= 1
             c.setFont(F_BOLD, fs)
 
@@ -1626,8 +1626,9 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
         c.rotate(90)
         c.setFont(F_BOLD, pin_fs)
 
-        text_w = stringWidth(pin, "Helvetica-Bold", pin_fs)
+        text_w = stringWidth(pin, F_BOLD, pin_fs)
         c.drawString(-text_w / 2, 0, pin)
+
 
         # underline under rotated PIN (to distinguish 6/9)
         underline_y = -3
@@ -1695,6 +1696,22 @@ def build_student_pin_pdf(class_name: str, sid: str, students):
             else:
                 # Empty slot: intentionally draw nothing (no outlines/lines)
                 pass
+
+        # --- Vertical dashed separators between students (like your screenshot)
+        # Draw separators at each cell boundary (except outer edges)
+        c.saveState()
+        c.setStrokeColorRGB(0.6, 0.6, 0.6)  # light gray
+        c.setLineWidth(1)
+        c.setDash(1, 3)  # dotted/dashed pattern (dash, gap)
+
+        sep_y0 = y0 + 6
+        sep_y1 = y1 - 6
+
+        for i in range(1, per_page):
+            x = x0 + i * cell_w
+            c.line(x, sep_y0, x, sep_y1)
+
+        c.restoreState()
 
         c.showPage()
 
