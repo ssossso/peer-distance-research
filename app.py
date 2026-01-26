@@ -3127,14 +3127,15 @@ def student_write():
                 placements_obj = {}
 
             resp = post_to_sheet({
-                "action": "result_append",
-                "teacher": row.teacher_username,
+                "action": "result_upsert",
+                "teacher": session["teacher"],
                 "class_code": code,
-                "student": name,
-                "session": sid,
-                "placements": placements_obj,
+                "student": session["teacher"],  # 교사 행 고정 키
+                "session": str(sid),
+                "placements": placements_for_sheet,
                 "ip": request.headers.get("X-Forwarded-For", request.remote_addr) or "",
             })
+
 
             if resp.get("status") != "ok":
                 return render_template(
