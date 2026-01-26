@@ -101,11 +101,10 @@
       const rows = body.querySelectorAll('tr');
       rows.forEach((r, idx) => {
         const inputs = r.querySelectorAll('input');
-        const selects = r.querySelectorAll('select');
 
         const noInput = inputs[0];
         const nameInput = inputs[1];
-        const genderSel = selects[0];
+        const genderInput = inputs[2];
 
         const name = (nameInput?.value || '').trim();
         if(!name) return;
@@ -113,14 +112,13 @@
         let no = (noInput?.value || '').trim();
         if(!no) no = String(idx + 1);
 
-        const gender = (genderSel?.value || '').trim(); // "M" | "F" | ""
-        // 형식: 번호 \t 이름 \t 성별
+        const gender = (genderInput?.value || '').trim(); // 예: 남 / 남자 / 여학생 ...
+        // 형식: 번호 \t 이름 \t 성별(원문)
         lines.push(`${no}\t${name}\t${gender}`);
-        // 백엔드 파서가 탭/콤마를 처리하므로 탭으로 통일
-        lines.push(`${no}\t${name}`);
       });
       hidden.value = lines.join('\n');
     }
+
 
     initRows(20);
 
@@ -150,7 +148,7 @@
       if(rowIndex < 0) return;
 
       const inputs = Array.from(tr.querySelectorAll('input'));
-      const colIndex = inputs.indexOf(target); // 0: 번호, 1: 이름
+      const colIndex = inputs.indexOf(target); // 0: 번호, 1: 이름, 2: 성별
       if(colIndex < 0) return;
 
       const text = (e.clipboardData || window.clipboardData)?.getData('text');
@@ -173,12 +171,17 @@
         const row = body.querySelectorAll('tr')[rowIndex + rOffset];
         const rowInputs = row.querySelectorAll('input');
 
-        if(cols.length >= 2){
-          // 2열 이상(번호+이름)을 붙여넣은 경우: 번호/이름을 그대로 채움
+        if(cols.length >= 3){
+          // 3열 이상(번호+이름+성별)
+          rowInputs[0].value = (cols[0] || '').trim();
+          rowInputs[1].value = (cols[1] || '').trim();
+          rowInputs[2].value = (cols[2] || '').trim();
+        } else if(cols.length === 2){
+          // 2열(번호+이름)
           rowInputs[0].value = (cols[0] || '').trim();
           rowInputs[1].value = (cols[1] || '').trim();
         } else {
-          // 1열만 붙여넣은 경우: 시작한 칸(번호/이름)에만 채움
+          // 1열만 붙여넣은 경우: 시작한 칸(번호/이름/성별)에만 채움
           rowInputs[colIndex].value = (cols[0] || '').trim();
         }
       });
