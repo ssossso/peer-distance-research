@@ -3750,32 +3750,25 @@ def kmeans_summary_payload(class_code: str, sid: str, k: int) -> Dict[str, Any]:
 
     cluster_mean_radius: List[Optional[float]] = []
     for ci in range(kk):
-        members = [i for i in range(len(points)) if labels[i] == ci]
-        if not members:
+        members_idx = [i for i in range(len(points)) if labels[i] == ci]
+        if not members_idx:
             cluster_mean_radius.append(None)
             continue
         cx, cy = centers[ci]
-        ds = [math.hypot(points[i][0] - cx, points[i][1] - cy) for i in members]
+        ds = [math.hypot(points[i][0] - cx, points[i][1] - cy) for i in members_idx]
         cluster_mean_radius.append(round(sum(ds) / len(ds), 6))
 
-    labeled_points: List[Dict[str, Any]] = []
-    for i in range(len(names)):
-        labeled_points.append({
-            "name": names[i],
-            "x": round(points[i][0], 6),
-            "y": round(points[i][1], 6),
-            "cluster_id": int(labels[i]) if i < len(labels) else 0,
-        })
-
-    # 1) 표준 points: cluster_id -> group_no(1..k)
-    points_std: List[Dict[str, Any]] = []
+    # -------------------------
+    # Standardized payload
+    # -------------------------
     assignments: Dict[str, int] = {}
+    points_std: List[Dict[str, Any]] = []
 
     for i in range(len(names)):
         cid = int(labels[i]) if i < len(labels) else 0
         group_no = cid + 1  # 1..k
         nm = names[i]
-        assignments[nm] = group_no
+        assignments[nm] = int(group_no)
         points_std.append({
             "name": nm,
             "x": round(points[i][0], 6),
@@ -3783,7 +3776,6 @@ def kmeans_summary_payload(class_code: str, sid: str, k: int) -> Dict[str, Any]:
             "group_no": int(group_no),
         })
 
-    # 2) 표준 groups: group_no별 members/centroid/size/mean_radius
     members_by_group: Dict[int, List[str]] = {g: [] for g in range(1, kk + 1)}
     for nm, gno in assignments.items():
         if 1 <= gno <= kk:
@@ -3816,7 +3808,6 @@ def kmeans_summary_payload(class_code: str, sid: str, k: int) -> Dict[str, Any]:
             "generated_at": datetime.utcnow().isoformat() + "Z",
         },
     }
-
 
 
 # -------------------------
