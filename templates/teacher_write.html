@@ -86,9 +86,7 @@
           <hr style="border:none; border-top:1px solid #e5e7eb; margin:12px 0;">
 
           <div style="display:flex; gap:8px;">
-            {% if run.submitted %}
-              <button type="button" disabled style="flex:1; opacity:0.6;">마무리 완료</button>
-            {% elif readonly or placements_complete %}
+            {% if readonly %}
               <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
                  style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
                 배치 수정
@@ -236,7 +234,7 @@
 </style>
 
 <script>
-  const READONLY = {{ 'true' if (run.submitted or readonly) else 'false' }};
+  const READONLY = {{ 'true' if readonly else 'false' }};
   const friends = {{ friends|tojson }};
   const initialPlacements = {{ placements|tojson }};
 
