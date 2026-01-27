@@ -951,14 +951,12 @@ if (btnExcludeSaveReasons) {
         // silent
       }
     }
-}
-
-
 
     // Exclude panel open/close
     if (btnExclude) {
       btnExclude.addEventListener('click', () => toggleBox(btnExclude, boxExclude));
     }
+
 
     // When no incomplete students: confirm -> mark exclusion resolved on server
     window.markExclusionResolved = async function(){
