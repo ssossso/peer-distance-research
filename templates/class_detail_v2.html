@@ -917,15 +917,14 @@ if (btnExcludeSaveReasons) {
       try{
         const st = await apiGetState();
         if (!st) return;
-    
+
         exclusionResolved = !!st.exclusions_resolved;
         surveySubmitted = !!st.survey_submitted;
         finalized = !!st.finalized;
-    
+
         updateGates();
-    
-        // ✅ 이미 저장된 참여 제외가 있으면, 입력 UI 대신 "저장 완료 요약"을 바로 보여주기
-        // st.exclusions: [{student_name, excluded, reason}, ...]
+
+        // ✅ 저장된 참여 제외 있으면 요약 표시
         const savedExcluded = Array.isArray(st.exclusions)
           ? st.exclusions.filter(x => x && x.excluded && (String(x.reason || '').trim().length > 0))
           : [];
@@ -938,23 +937,21 @@ if (btnExcludeSaveReasons) {
           if (btnExcludeNo) btnExcludeNo.style.display = 'none';
         }
 
-        // ✅ B안(현실적): 이미 저장(finalized) 되었으면 "저장됨" 표시 + 설문 미완료면 배지로 권장
+        // ✅ 이미 finalized면 "저장됨" 표시 + 저장버튼 비활성
         if (finalized){
           if (finalizeSavedMsg) finalizeSavedMsg.style.display = 'block';
 
-          // 이미 저장된 경우 저장 버튼은 UX상 굳이 누르게 하지 않음(원하면 활성화로 바꿔도 됨)
           if (btnResultSave){
             btnResultSave.textContent = '이미 저장됨';
             btnResultSave.classList.add('is-disabled');
             btnResultSave.setAttribute('aria-disabled', 'true');
           }
         }
-}
-    
       } catch(e){
         // silent
       }
     }
+}
 
 
 
