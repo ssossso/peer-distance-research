@@ -884,10 +884,23 @@ if (btnExcludeSaveReasons) {
         finalized = !!st.finalized;
 
         updateGates();
+
+        // ✅ 이미 저장된 exclusions가 있으면, 입력 UI 대신 "저장 완료 요약"으로 즉시 렌더
+        if (exclusionResolved && Array.isArray(st.exclusions_items) && st.exclusions_items.length > 0){
+          if (excludeReasons) excludeReasons.style.display = 'none';
+          renderExcludedSummary(st.exclusions_items);
+
+          // 참여 제외 박스가 열려있든 아니든, 열면 바로 요약이 보이도록 유지
+          if (boxExclude && (boxExclude.style.display === 'block')) {
+            // already open: keep
+          }
+        }
+
       } catch(e){
         // silent
       }
     }
+
 
     // Exclude panel open/close
     if (btnExclude) {
