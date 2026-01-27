@@ -3208,9 +3208,9 @@ def teacher_placement_write(run_id: int):
     except Exception:
         placements_complete = False
 
-    # ✅ 기본은 읽기 전용(완료된 경우). 수정하고 싶으면 ?edit=1
+    # ✅ 기본은 읽기 전용(완료/마무리된 경우). 수정하고 싶으면 ?edit=1
     edit_mode = (request.args.get("edit") or "").strip() == "1"
-    readonly = placements_complete and (not edit_mode)
+    readonly = (not edit_mode) and (placements_complete or bool(run.get("submitted")))
 
     if request.method == "POST":
         placements_json = (request.form.get("placements_json") or "{}").strip()
