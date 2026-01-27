@@ -91,12 +91,10 @@
 
             {% elif readonly %}
               <!-- readonly(배치 저장됨) 상태: 버튼 2개 -->
-              <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
-                 style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #d1d5db;">
+              <a class="tp-btn tp-btn-secondary" href="/teacher/placement/{{ run.id }}?edit=1">
                 배치 수정
               </a>
-              <button type="button" class="btn" id="btnNextStep"
-                      style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+              <button type="button" class="tp-btn tp-btn-primary" id="btnNextStep">
                 다음 단계
               </button>
 
@@ -124,38 +122,37 @@
 
           <!-- 깃발(우선순위) -->
           <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:10px; margin-bottom:10px;">
-            <div style="font-weight:800; margin-bottom:8px;">생활지도 개입 우선순위(선택)</div>
+            <div class="tp-title-2line">또래관계(갈등·고립) 측면에서 추가로 살펴볼 필요가 있다고<br>느낀 학생 선택</div>
 
             <div style="display:flex; gap:10px; align-items:stretch; margin-bottom:8px;">
               <button type="button" class="rankBtn" data-rank="1"
                       style="flex:1; padding:10px 0; border-radius:12px; border:1px solid #d1d5db; background:#ffffff;
-                             font-weight:850; font-size:13px; cursor:pointer;">
+                             font-weight:850; font-size:13px; cursor:pointer; color:#111827;">
                 1순위
               </button>
               <button type="button" class="rankBtn" data-rank="2"
                       style="flex:1; padding:10px 0; border-radius:12px; border:1px solid #d1d5db; background:#ffffff;
-                             font-weight:850; font-size:13px; cursor:pointer;">
+                             font-weight:850; font-size:13px; cursor:pointer; color:#111827;">
                 2순위
               </button>
               <button type="button" class="rankBtn" data-rank="3"
                       style="flex:1; padding:10px 0; border-radius:12px; border:1px solid #d1d5db; background:#ffffff;
-                             font-weight:850; font-size:13px; cursor:pointer;">
+                             font-weight:850; font-size:13px; cursor:pointer; color:#111827;">
                 3순위
               </button>
             </div>
 
             <div class="muted" style="font-size:12px; line-height:1.45;">
-              1~3순위 선택 후, 배치 결과의 학생 이름 선택
+              순위 선택 → 왼쪽에서 학생 이름
             </div>
           </div>
 
           <!-- 저장 -->
           <div style="display:flex; gap:8px; margin-top:auto;">
-            <button type="button" class="btn" id="btnBack"
-                    style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #d1d5db;">
+            <button type="button" class="tp-btn tp-btn-secondary" id="btnBack">
               돌아가기
             </button>
-            <button type="submit" id="btnSavePerception" style="flex:1;">기록 저장</button>
+            <button type="submit" class="tp-btn tp-btn-primary" id="btnSave">기록 저장</button>
           </div>
         </div>
 
@@ -190,6 +187,53 @@
     pointer-events:none;
     white-space:nowrap;
   }
+
+  /* -------------------------------------------------
+     Teacher placement unified buttons
+     - Same size/shape for: 배치 수정 / 다음 단계 / 돌아가기 / 기록 저장
+  ------------------------------------------------- */
+  .tp-btn{
+    width:100%;
+    height:44px;
+    padding:0 14px;
+    border-radius:12px;
+    border:1px solid #d1d5db;
+    background:#ffffff;
+    color:#111827;
+    font-weight:900;
+    font-size:14px;
+    line-height:1;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+    box-sizing:border-box;
+    cursor:pointer;
+  }
+  .tp-btn:hover{ border-color:#9ca3af; }
+  .tp-btn-primary{
+    background:#4a6cf7;
+    border-color:#4a6cf7;
+    color:#ffffff;
+  }
+  .tp-btn-primary:hover{
+    background:#3955c6;
+    border-color:#3955c6;
+  }
+  .tp-btn:disabled{
+    opacity:0.55;
+    cursor:not-allowed;
+  }
+  .tp-title-2line{
+    font-weight:900;
+    font-size:13px;
+    line-height:1.35;
+    margin-bottom:8px;
+  }
+  .rankBtn{
+    color:#111827 !important;
+  }
+
 </style>
 
 <script>
