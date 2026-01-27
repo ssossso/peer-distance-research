@@ -269,19 +269,28 @@
   {% set rounds = [("1","3월 말"), ("2","4월 말"), ("3","5월 말"), ("4","6월 말")] %}
   <div class="round-row">
     {% for n, when in rounds %}
-      <a
+      <div
         class="round-pill {% if open_panel and (sid|string)==(n|string) %}active{% endif %}"
-        href="/teacher/class/{{ code }}/v2?sid={{ n }}&open=1"
-        style="text-decoration:none;"
+        data-open-href="/teacher/class/{{ code }}/v2?sid={{ n }}&open=1"
+        role="button"
+        tabindex="0"
         title="{{ n }}차 조사 열기"
       >
-      <div class="round-title">{{ n }}회차</div>
-      <div class="round-sub">{{ when }}</div>
-      <div class="round-result-btn">결과<br>보기</div>
+        <div class="round-title">{{ n }}회차</div>
+        <div class="round-sub">{{ when }}</div>
 
-      </a>
+        <a
+          class="round-result-btn"
+          href="/teacher/class/{{ code }}/analysis?sid={{ n }}"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="{{ n }}차 결과 보기"
+          onclick="event.stopPropagation();"
+        >결과<br>보기</a>
+      </div>
     {% endfor %}
   </div>
+
 
   {% if open_panel %}
   <div class="panel" id="roundPanel">
@@ -617,6 +626,27 @@
   })();
 
   // -------------------------------------------------
+  // Round pill click -> open session panel
+  // (Result button has its own link and stops propagation)
+  // -------------------------------------------------
+  (function(){
+    const pills = Array.from(document.querySelectorAll('.round-pill[data-open-href]'));
+    pills.forEach(p => {
+      p.addEventListener('click', () => {
+        const href = p.getAttribute('data-open-href');
+        if (href) window.location.href = href;
+      });
+      p.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const href = p.getAttribute('data-open-href');
+          if (href) window.location.href = href;
+        }
+      });
+    });
+  })();
+
+  // -------------------------------------------------
   // QR actions
   // -------------------------------------------------
   function safeFilename(s){
@@ -648,6 +678,7 @@
       window.open(src, '_blank', 'noopener,noreferrer');
     }
   }
+
 
   // -------------------------------------------------
   // Minimal modal helpers
@@ -961,37 +992,10 @@ if (btnExcludeSaveReasons) {
           finalized = true;
           updateGates();
 
-          if (boxFinalize) boxFinalize.style.display = 'block';
-          setActive(btnFinalize, true);
+          const fallbackUrl = `/teacher/class/${CODE}/analysis?sid=${SID}`;
+          const resultUrl = (res && res.result_url) ? res.result_url : fallbackUrl;
 
-          const a = boxFinalize ? boxFinalize.querySelector('a[href="#"]') : null;
-          if (a && res.result_url) a.href = res.result_url;
-
-          const roundLink = document.querySelector('.round-pill.active');
-          if (roundLink && res.result_url){
-            let existing = roundLink.querySelector('.round-result');
-            if (!existing){
-              existing = document.createElement('div');
-              existing.className = 'round-result';
-              existing.style.marginTop = '8px';
-              const b = document.createElement('a');
-              b.textContent = '결과 보기';
-              b.href = res.result_url;
-              b.className = 'pill';
-              b.style.borderColor = '#ffffff';
-              b.style.background = '#ffffff';
-              b.style.color = '#4a6cf7';
-              b.style.padding = '8px 12px';
-              b.style.borderRadius = '12px';
-              b.style.fontWeight = '950';
-              b.style.textDecoration = 'none';
-              existing.appendChild(b);
-              roundLink.appendChild(existing);
-            } else {
-              const b = existing.querySelector('a');
-              if (b) b.href = res.result_url;
-            }
-          }
+          window.location.href = resultUrl;
 
         }catch(e){
           if (String(e.message) === 'NOT_READY'){
@@ -1002,6 +1006,7 @@ if (btnExcludeSaveReasons) {
         }
       });
     }
+
 
     refreshFromServer();
   })();
