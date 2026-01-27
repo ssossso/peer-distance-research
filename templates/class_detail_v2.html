@@ -427,19 +427,12 @@
 
           <button
             type="button"
-            class="action-btn is-disabled"
-            id="btnSurvey"
-            aria-disabled="true"
-          >교사 설문</button>
-
-          <button
-            type="button"
             class="action-btn primary is-disabled"
             id="btnFinalize"
             aria-disabled="true"
           >결과</button>
-
         </div>
+
 
         <div class="mini-card" id="boxExclude" style="display:none;">
           <div style="font-weight:950;">참여 제외 학생</div>
@@ -474,117 +467,147 @@
             </div>
           {% endif %}
         </div>
-
-        <div class="mini-card" id="boxSurvey" style="display:none;">
-          <div style="font-weight:950;">교사 설문</div>
-          <div class="small" style="margin-top:6px;">
-            연구 목적 설문입니당. 귀찮게 해서 미안해용ㅜㅠㅠ 너무 고마워,,,
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:900; margin:0 0 6px 0;">1) 이번 회차의 관계 지도 결과는 학급 내 교우관계를 이해하는 데 도움이 되었습니까?</div>
-            <div class="field-row">
-              {% for i in [1,2,3,4,5] %}
-                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                  <input type="radio" name="q1_help" value="{{ i }}" style="width:auto;" /> {{ i }}
-                </label>
-              {% endfor %}
-              <span class="small">(1=전혀 아니다, 5=매우 그렇다)</span>
-            </div>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:900; margin:0 0 6px 0;">2) 이번 결과를 통해 기존에 인식하지 못했던 관계나 집단 구조가 있었습니까?</div>
-            <div class="field-row">
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q2_new" value="yes" style="width:auto;" /> 있었다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q2_new" value="no" style="width:auto;" /> 없었다
-              </label>
-            </div>
-            <textarea id="q2_detail" rows="3" placeholder="(선택) 새롭게 인식한 관계/구조가 있다면 간단히 적어 주세요." style="margin-top:8px;"></textarea>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:900; margin:0 0 6px 0;">3) 이번 결과는 학생 상담/생활지도 판단 시 참고 자료로 활용할 수 있다고 느끼십니까?</div>
-            <div class="field-row">
-              {% for i in [1,2,3,4,5] %}
-                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                  <input type="radio" name="q3_use" value="{{ i }}" style="width:auto;" /> {{ i }}
-                </label>
-              {% endfor %}
-              <span class="small">(1=전혀 아니다, 5=매우 그렇다)</span>
-            </div>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:900; margin:0 0 6px 0;">4) 이번 결과는 교사가 평소 가지고 있던 관계 인식과 비교했을 때 어떤 편이었습니까?</div>
-            <div class="field-row">
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q4_cmp" value="similar" style="width:auto;" /> 대부분 유사했다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q4_cmp" value="some" style="width:auto;" /> 일부 차이가 있었다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q4_cmp" value="many" style="width:auto;" /> 상당한 차이가 있었다
-              </label>
-            </div>
-            <textarea id="q4_detail" rows="3" placeholder="(선택) 차이가 있었다면 이유나 인상 깊었던 점을 적어 주세요." style="margin-top:8px;"></textarea>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:900; margin:0 0 6px 0;">5) 이 도구를 사용하면서 관계 판단에 대한 확신도는 어떻게 느껴졌습니까?</div>
-            <div class="field-row">
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q5_conf" value="confused" style="width:auto;" /> 오히려 혼란스러웠다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q5_conf" value="same" style="width:auto;" /> 큰 변화는 없었다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q5_conf" value="little" style="width:auto;" /> 조금 더 확신이 생겼다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q5_conf" value="much" style="width:auto;" /> 확실히 도움이 되었다
-              </label>
-            </div>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:900; margin:0 0 6px 0;">6) (선택) 다음 회차에서도 이 도구를 활용할 의향이 있으십니까?</div>
-            <div class="field-row">
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q6_next" value="yes" style="width:auto;" /> 있다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q6_next" value="no" style="width:auto;" /> 없다
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
-                <input type="radio" name="q6_next" value="maybe" style="width:auto;" /> 상황에 따라 다르다
-              </label>
-            </div>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:900; margin:0 0 6px 0;">7) (선택) 불편했던 점/개선되었으면 하는 점이 있다면 적어 주세요.</div>
-            <textarea id="q7_feedback" rows="3" placeholder="자유롭게 작성" style="margin-top:8px;"></textarea>
-          </div>
-
-          <div class="btn-row">
-            <button type="button" class="action-btn primary" id="btnSurveySubmit">설문 제출</button>
-            <span class="small" id="surveyHint">설문 제출 후 ‘결과 저장’ 버튼이 활성화됩니다.</span>
-          </div>
-        </div>
-
         <div class="mini-card" id="boxFinalize" style="display:none;">
-          <div style="font-weight:950;">결과 저장</div>
-          <div class="small" style="margin-top:6px;">결과가 저장되었습니다. 감사합니다.</div>
-          <div class="btn-row">
-            <a class="pill action-btn primary" href="#" style="text-decoration:none;">결과 화면 보기</a>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div style="font-weight:950;">결과</div>
+            <span
+              id="badgeSurvey"
+              class="status todo"
+              style="border-radius:999px; padding:4px 10px;"
+            >설문 미완료(권장)</span>
+          </div>
+
+          <div class="small" style="margin-top:6px;" id="finalizeTopHint">
+            결과 저장을 완료하려면 교사 설문을 먼저 제출해 주세요.
+          </div>
+
+          <div class="mini-card" style="margin-top:12px;">
+            <div style="font-weight:950;">교사 설문</div>
+            <div class="small" style="margin-top:6px;">
+              아래 설문은 이번 회차 결과를 바탕으로, 교사가 느낀 학급 이해 및 판단 과정에 대한 의견을 묻기 위한 것입니다.
+              응답 내용은 연구 목적으로만 사용되며, 개별 학생 평가나 행정 자료로 활용되지 않습니다.
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="font-weight:900; margin:0 0 6px 0;">1) 이번 회차의 관계 지도 결과는 학급 내 교우관계를 이해하는 데 도움이 되었습니까?</div>
+              <div class="field-row">
+                {% for i in [1,2,3,4,5] %}
+                  <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                    <input type="radio" name="q1_help" value="{{ i }}" style="width:auto;" /> {{ i }}
+                  </label>
+                {% endfor %}
+                <span class="small">(1=전혀 아니다, 5=매우 그렇다)</span>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="font-weight:900; margin:0 0 6px 0;">2) 이번 결과를 통해 기존에 인식하지 못했던 관계나 집단 구조가 있었습니까?</div>
+              <div class="field-row">
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q2_new" value="yes" style="width:auto;" /> 있었다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q2_new" value="no" style="width:auto;" /> 없었다
+                </label>
+              </div>
+              <textarea id="q2_detail" rows="3" placeholder="(선택) 새롭게 인식한 관계/구조가 있다면 간단히 적어 주세요." style="margin-top:8px;"></textarea>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="font-weight:900; margin:0 0 6px 0;">3) 이번 결과는 학생 상담/생활지도 판단 시 참고 자료로 활용할 수 있다고 느끼십니까?</div>
+              <div class="field-row">
+                {% for i in [1,2,3,4,5] %}
+                  <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                    <input type="radio" name="q3_use" value="{{ i }}" style="width:auto;" /> {{ i }}
+                  </label>
+                {% endfor %}
+                <span class="small">(1=전혀 아니다, 5=매우 그렇다)</span>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="font-weight:900; margin:0 0 6px 0;">4) 이번 결과는 교사가 평소 가지고 있던 관계 인식과 비교했을 때 어떤 편이었습니까?</div>
+              <div class="field-row">
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q4_cmp" value="similar" style="width:auto;" /> 대부분 유사했다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q4_cmp" value="some" style="width:auto;" /> 일부 차이가 있었다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q4_cmp" value="many" style="width:auto;" /> 상당한 차이가 있었다
+                </label>
+              </div>
+              <textarea id="q4_detail" rows="3" placeholder="(선택) 차이가 있었다면 이유나 인상 깊었던 점을 적어 주세요." style="margin-top:8px;"></textarea>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="font-weight:900; margin:0 0 6px 0;">5) 이 도구를 사용하면서 관계 판단에 대한 확신도는 어떻게 느껴졌습니까?</div>
+              <div class="field-row">
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q5_conf" value="confused" style="width:auto;" /> 오히려 혼란스러웠다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q5_conf" value="same" style="width:auto;" /> 큰 변화는 없었다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q5_conf" value="little" style="width:auto;" /> 조금 더 확신이 생겼다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q5_conf" value="much" style="width:auto;" /> 확실히 도움이 되었다
+                </label>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="font-weight:900; margin:0 0 6px 0;">6) (선택) 다음 회차에서도 이 도구를 활용할 의향이 있으십니까?</div>
+              <div class="field-row">
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q6_next" value="yes" style="width:auto;" /> 있다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q6_next" value="no" style="width:auto;" /> 없다
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                  <input type="radio" name="q6_next" value="maybe" style="width:auto;" /> 상황에 따라 다르다
+                </label>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="font-weight:900; margin:0 0 6px 0;">7) (선택) 불편했던 점/개선되었으면 하는 점이 있다면 적어 주세요.</div>
+              <textarea id="q7_feedback" rows="3" placeholder="자유롭게 작성" style="margin-top:8px;"></textarea>
+            </div>
+
+            <div class="btn-row">
+              <button type="button" class="action-btn primary" id="btnSurveySubmit">설문 제출</button>
+              <span class="small" id="surveyHint">설문 제출 후 ‘결과 저장’ 버튼이 활성화됩니다.</span>
+            </div>
+          </div>
+
+          <div class="btn-row" style="margin-top:12px;">
+            <button
+              type="button"
+              class="action-btn primary is-disabled"
+              id="btnResultSave"
+              aria-disabled="true"
+            >이번 회차 결과 저장</button>
+
+            <a
+              class="pill action-btn"
+              id="resultLink"
+              href="/teacher/class/{{ code }}/analysis?sid={{ sid }}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="text-decoration:none;"
+            >결과 보기</a>
+          </div>
+
+          <div class="small" id="finalizeSavedMsg" style="margin-top:8px; display:none;">
+            저장되었습니다.
           </div>
         </div>
+
 
       </div>
     </div>
