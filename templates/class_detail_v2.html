@@ -484,8 +484,7 @@
           <div class="mini-card" style="margin-top:12px;">
             <div style="font-weight:950;">교사 설문</div>
             <div class="small" style="margin-top:6px;">
-              아래 설문은 이번 회차 결과를 바탕으로, 교사가 느낀 학급 이해 및 판단 과정에 대한 의견을 묻기 위한 것입니다.
-              응답 내용은 연구 목적으로만 사용되며, 개별 학생 평가나 행정 자료로 활용되지 않습니다.
+              연구 목적 설문입니당. 귀찮게 해서 미안해용ㅜㅠㅠ 너무 고마워,,,
             </div>
 
             <div style="margin-top:12px;">
@@ -930,15 +929,27 @@ if (btnExcludeSaveReasons) {
         const savedExcluded = Array.isArray(st.exclusions)
           ? st.exclusions.filter(x => x && x.excluded && (String(x.reason || '').trim().length > 0))
           : [];
-    
+
         if (exclusionResolved && savedExcluded.length > 0){
           if (excludeReasons) excludeReasons.style.display = 'none';
           renderExcludedSummary(savedExcluded);
-    
-          // 입력 시작 버튼들도 숨기고 싶으면(완료 UI만 보이게)
+
           if (btnExcludeYes) btnExcludeYes.style.display = 'none';
           if (btnExcludeNo) btnExcludeNo.style.display = 'none';
         }
+
+        // ✅ B안(현실적): 이미 저장(finalized) 되었으면 "저장됨" 표시 + 설문 미완료면 배지로 권장
+        if (finalized){
+          if (finalizeSavedMsg) finalizeSavedMsg.style.display = 'block';
+
+          // 이미 저장된 경우 저장 버튼은 UX상 굳이 누르게 하지 않음(원하면 활성화로 바꿔도 됨)
+          if (btnResultSave){
+            btnResultSave.textContent = '이미 저장됨';
+            btnResultSave.classList.add('is-disabled');
+            btnResultSave.setAttribute('aria-disabled', 'true');
+          }
+        }
+}
     
       } catch(e){
         // silent
@@ -997,14 +1008,6 @@ if (btnExcludeSaveReasons) {
       });
     }
 
-    // Survey panel: if disabled -> modal, else toggle
-    if (btnSurvey) {
-      btnSurvey.addEventListener('click', () => {
-        const disabled = btnSurvey.getAttribute('aria-disabled') === 'true';
-        if (disabled) return window.openGateModal(GATE_MSG);
-        toggleBox(btnSurvey, boxSurvey);
-      });
-    }
 
     function getRadio(name){
       const el = document.querySelector(`input[name="${name}"]:checked`);
@@ -1037,29 +1040,42 @@ if (btnExcludeSaveReasons) {
       });
     }
 
-// Finalize: if disabled -> modal, else proceed
-if (btnFinalize) {
-  btnFinalize.addEventListener('click', async () => {
-    const disabled = btnFinalize.getAttribute('aria-disabled') === 'true';
-    if (disabled) return window.openGateModal(GATE_MSG);
-
-    try{
-      await apiPost('finalize', {});
-      finalized = true;
-      updateGates();
-
-      // ✅ 회차 카드의 "결과<br>보기"와 동일한 페이지로 이동
-      window.location.href = `/teacher/class/${CODE}/analysis?sid=${SID}`;
-
-    }catch(e){
-      if (String(e.message) === 'NOT_READY'){
-        window.openGateModal(GATE_MSG);
-      } else {
-        alert('최종 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
-      }
+    // ✅ '결과' 버튼: 결과 박스 열기(설문/저장 유도)
+    if (btnFinalize) {
+      btnFinalize.addEventListener('click', () => {
+        const disabled = btnFinalize.getAttribute('aria-disabled') === 'true';
+        if (disabled) return window.openGateModal(GATE_MSG);
+        toggleBox(btnFinalize, boxFinalize);
+      });
     }
-  });
-}
+
+    // ✅ 결과 저장 버튼: finalize 호출 후, 기존 '결과 보기' 페이지(analysis)로 연결
+    if (btnResultSave) {
+      btnResultSave.addEventListener('click', async () => {
+        const disabled = btnResultSave.getAttribute('aria-disabled') === 'true';
+        if (disabled) return window.openGateModal('교사 설문을 먼저 제출해 주세요.');
+
+        try{
+          const res = await apiPost('finalize', {});
+          finalized = true;
+          updateGates();
+
+          if (finalizeSavedMsg) finalizeSavedMsg.style.display = 'block';
+
+          const fallbackUrl = `/teacher/class/${CODE}/analysis?sid=${SID}`;
+          const resultUrl = (res && res.result_url) ? res.result_url : fallbackUrl;
+
+          if (resultLink) resultLink.href = resultUrl;
+          window.open(resultUrl, '_blank', 'noopener,noreferrer');
+        }catch(e){
+          if (String(e.message) === 'NOT_READY'){
+            window.openGateModal(GATE_MSG);
+          } else {
+            alert('최종 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
+          }
+        }
+      });
+    }
 
 
 
