@@ -338,14 +338,32 @@
           맞고 틀린 게 없으니 부담 없이 떠오르는 대로 학생들을 배치해 주세요.
         </div>
 
+{% set has_teacher_run = (teacher_run is defined and teacher_run) %}
+
+{% if has_teacher_run %}
+  <div style="font-weight:900; color:#111827; margin:0 0 10px 0;">
+    완료되었습니다.
+  </div>
+{% endif %}
+
         <div class="btn-row">
-          <a
-            class="pill action-btn primary"
-            href="/teacher/class/{{ code }}/placement/start?sid={{ sid }}"
-            target="_blank"
-            rel="noopener noreferrer"
-            style="text-decoration:none;"
-          >시작</a>
+          {% if has_teacher_run %}
+            <a
+              class="pill action-btn primary"
+              href="/teacher/placement/{{ teacher_run.id }}?edit=1"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="text-decoration:none;"
+            >수정</a>
+          {% else %}
+            <a
+              class="pill action-btn primary"
+              href="/teacher/class/{{ code }}/placement/start?sid={{ sid }}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="text-decoration:none;"
+            >시작</a>
+          {% endif %}
         </div>
       </div>
 
