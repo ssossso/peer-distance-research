@@ -409,17 +409,13 @@
               <button type="button" class="action-btn" onclick="markExclusionResolved();">확인</button>
             </div>
           {% else %}
-            <div class="small" style="margin-top:6px;">
-              아래 학생은 이번 회차 조사에 참여하지 못했습니다. 이번 회차 분석에서 참여 제외 처리할지 선택해 주세요.
-            </div>
-
             <div class="note" style="margin-top:10px;">
               <b>{{ incomplete_names|join(', ') }}</b> 학생이 미완료하였습니다. 참여 제외하시겠습니까?
             </div>
 
             <div class="btn-row">
               <button type="button" class="action-btn" id="btnExcludeYes">예 (사유 입력)</button>
-              <button type="button" class="action-btn" id="btnExcludeNo">아니요 (학생 추가 참여 예정)</button>
+              <button type="button" class="action-btn" id="btnExcludeNo">아니요 (학생 참여 예정)</button>
             </div>
 
             <div id="excludeReasons" style="display:none; margin-top:10px;">
@@ -430,6 +426,10 @@
                   <input class="reason-input" type="text" placeholder="사유 입력" data-reason-for="{{ nm|e }}" />
                 </div>
               {% endfor %}
+            
+              <div class="btn-row" style="justify-content:flex-start; margin-top:10px;">
+                <button type="button" class="action-btn" id="btnExcludeSaveReasons">참여 제외 사유 저장</button>
+              </div>
             </div>
           {% endif %}
         </div>
@@ -737,12 +737,50 @@
       setActive(btn, show);
     }
 
-    function allReasonsFilled(){
-      if (!excludeReasons) return true;
-      const inputs = Array.from(excludeReasons.querySelectorAll('input[data-reason-for]'));
-      if (inputs.length === 0) return true;
-      return inputs.every(i => (i.value || '').trim().length > 0);
+function renderExcludedSummary(items){
+  if (!boxExclude) return;
+  const names = (items || []).map(x => x.student_name).filter(Boolean);
+
+  boxExclude.innerHTML = `
+    <div style="font-weight:950;">참여 제외 학생</div>
+    <div class="small" style="margin-top:6px;">이번 회차 분석에서 아래 학생을 참여 제외로 처리했습니다.</div>
+    <div class="note" style="margin-top:10px;">
+      <b>${names.join(', ')}</b>
+    </div>
+  `;
+}
+
+const btnExcludeSaveReasons = document.getElementById('btnExcludeSaveReasons');
+if (btnExcludeSaveReasons) {
+  btnExcludeSaveReasons.addEventListener('click', async () => {
+    if (!allReasonsFilled()){
+      alert('모든 학생의 사유를 입력해 주세요.');
+      return;
     }
+
+    const inputs = Array.from(excludeReasons.querySelectorAll('input[data-reason-for]'));
+    const items = inputs.map(i => ({
+      student_name: i.getAttribute('data-reason-for'),
+      reason: (i.value || '').trim()
+    }));
+
+    try{
+      await apiPost('exclusions', { mode: 'exclude', items });
+      exclusionResolved = true;
+      updateGates();
+
+      if (excludeReasons) excludeReasons.style.display = 'none';
+
+      renderExcludedSummary(items);
+
+      if (boxExclude) boxExclude.style.display = 'block';
+      setActive(btnExclude, true);
+    }catch(e){
+      alert('저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
+    }
+  });
+}
+
 
     async function refreshFromServer(){
       try{
@@ -786,12 +824,13 @@
           exclusionResolved = true;
           if (excludeReasons) excludeReasons.style.display = 'none';
           updateGates();
-          alert('확인되었습니다. (추가 참여 예정)');
+          window.openGateModal('확인했습니다. 학생 참여 후 다시 회차 마무리해주세요.');
         }catch(e){
           alert('저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
         }
       });
     }
+
 
     if (btnExcludeYes) {
       btnExcludeYes.addEventListener('click', () => {
@@ -800,30 +839,13 @@
         updateGates();
       });
     }
-
+    
     if (excludeReasons) {
       excludeReasons.addEventListener('input', () => {
-        exclusionResolved = allReasonsFilled();
         updateGates();
       });
-
-      excludeReasons.addEventListener('change', async () => {
-        if (!allReasonsFilled()) return;
-        const inputs = Array.from(excludeReasons.querySelectorAll('input[data-reason-for]'));
-        const items = inputs.map(i => ({
-          student_name: i.getAttribute('data-reason-for'),
-          reason: (i.value || '').trim()
-        }));
-        try{
-          await apiPost('exclusions', { mode: 'exclude', items });
-          exclusionResolved = true;
-          updateGates();
-          alert('참여 제외 사유가 저장되었습니다.');
-        }catch(e){
-          alert('저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
-        }
-      });
     }
+
 
     // Survey panel: if disabled -> modal, else toggle
     if (btnSurvey) {
