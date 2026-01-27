@@ -751,12 +751,17 @@
     const API_BASE = `/api/v2/class/${CODE}/session/${SID}`;
 
     const btnExclude = document.getElementById('btnExclude');
-    const btnSurvey = document.getElementById('btnSurvey');
     const btnFinalize = document.getElementById('btnFinalize');
 
     const boxExclude = document.getElementById('boxExclude');
-    const boxSurvey = document.getElementById('boxSurvey');
     const boxFinalize = document.getElementById('boxFinalize');
+
+    const btnResultSave = document.getElementById('btnResultSave');
+    const badgeSurvey = document.getElementById('badgeSurvey');
+    const finalizeTopHint = document.getElementById('finalizeTopHint');
+    const finalizeSavedMsg = document.getElementById('finalizeSavedMsg');
+    const resultLink = document.getElementById('resultLink');
+
 
     const btnExcludeYes = document.getElementById('btnExcludeYes');
     const btnExcludeNo = document.getElementById('btnExcludeNo');
@@ -784,12 +789,26 @@
     }
 
     function updateGates(){
-      // survey is enabled only after exclusion resolved
-      setAriaEnabled(btnSurvey, exclusionResolved);
+      // ✅ '결과' 버튼은 참여 제외 처리 완료 후 열 수 있게
+      setAriaEnabled(btnFinalize, exclusionResolved);
 
-      // finalize enabled only after survey submitted
-      setAriaEnabled(btnFinalize, surveySubmitted);
+      // ✅ '결과 저장'은 설문 제출 후 활성화(UX 게이트)
+      const canSave = !!surveySubmitted;
+      setAriaEnabled(btnResultSave, canSave);
+
+      // 배지/힌트 상태
+      if (badgeSurvey){
+        badgeSurvey.classList.toggle('done', !!surveySubmitted);
+        badgeSurvey.classList.toggle('todo', !surveySubmitted);
+        badgeSurvey.textContent = surveySubmitted ? '설문 완료' : '설문 미완료(권장)';
+      }
+      if (finalizeTopHint){
+        finalizeTopHint.textContent = surveySubmitted
+          ? '설문이 완료되었습니다. 아래에서 결과 저장을 진행해 주세요.'
+          : '결과 저장을 완료하려면 교사 설문을 먼저 제출해 주세요.';
+      }
     }
+
 
     async function apiGetState(){
       const res = await fetch(`${API_BASE}/state`, { cache: 'no-store' });
