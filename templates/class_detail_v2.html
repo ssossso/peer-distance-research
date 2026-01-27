@@ -768,7 +768,14 @@
       box.style.display = show ? 'block' : 'none';
       setActive(btn, show);
     }
+    function allReasonsFilled(){
+      if (!excludeReasons) return true;
+      const inputs = Array.from(excludeReasons.querySelectorAll('input[data-reason-for]'));
+      if (inputs.length === 0) return true;
+      return inputs.every(i => (i.value || '').trim().length > 0);
+    }
 
+    
     function escapeHtml(s){
       return String(s || '')
         .replace(/&/g, '&amp;')
@@ -803,6 +810,11 @@
 const btnExcludeSaveReasons = document.getElementById('btnExcludeSaveReasons');
 if (btnExcludeSaveReasons) {
   btnExcludeSaveReasons.addEventListener('click', async () => {
+    if (!excludeReasons){
+      alert('사유 입력 영역을 찾을 수 없습니다.');
+      return;
+    }
+
     if (!allReasonsFilled()){
       alert('모든 학생의 사유를 입력해 주세요.');
       return;
@@ -816,18 +828,16 @@ if (btnExcludeSaveReasons) {
 
     try{
       await apiPost('exclusions', { mode: 'exclude', items });
+
       exclusionResolved = true;
       updateGates();
-      
-      if (excludeReasons) excludeReasons.style.display = 'none';
-      
+
+      excludeReasons.style.display = 'none';
+
       renderExcludedSummary(items);
-      
-      if (boxExclude) boxExclude.style.display = 'block';
+
+      boxExclude.style.display = 'block';
       setActive(btnExclude, true);
-      
-      if (boxSurvey) boxSurvey.style.display = 'none';
-      setActive(btnSurvey, false);
     }catch(e){
       alert('저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
     }
@@ -895,6 +905,7 @@ if (btnExcludeSaveReasons) {
     
     if (excludeReasons) {
       excludeReasons.addEventListener('input', () => {
+        exclusionResolved = allReasonsFilled();
         updateGates();
       });
     }
