@@ -91,14 +91,14 @@
 
             {% elif readonly %}
               <!-- readonly(배치 저장됨) 상태: 버튼 2개 -->
+              <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
+                 style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #d1d5db;">
+                배치 수정
+              </a>
               <button type="button" class="btn" id="btnNextStep"
                       style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
                 다음 단계
               </button>
-              <a class="btn" href="/teacher/placement/{{ run.id }}?edit=1"
-                 style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
-                배치 수정
-              </a>
 
             {% else %}
               <button type="submit" style="flex:1;">배치 저장</button>
@@ -116,7 +116,7 @@
           <!-- 확신도 -->
           <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:10px; margin-bottom:10px;">
             <div style="font-weight:800; margin-bottom:8px;">확신도</div>
-            <div style="display:flex; justify-content:space-between; font-size:12px; color:#6b7280; margin:0 2px 6px 2px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#6b7280; margin:0 2px 3px 2px;">
               <span>0</span><span>100</span>
             </div>
             <input id="confidence_slider" type="range" min="0" max="100" value="50" style="width:100%;">
@@ -124,40 +124,35 @@
 
           <!-- 깃발(우선순위) -->
           <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:10px; margin-bottom:10px;">
-            <div style="font-weight:800; margin-bottom:8px;">생활지도 개입 우선순위</div>
+            <div style="font-weight:800; margin-bottom:8px;">생활지도 개입 우선순위(선택)</div>
 
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; gap:10px; align-items:stretch; margin-bottom:8px;">
               <button type="button" class="rankBtn" data-rank="1"
-                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
-                             font-weight:750; font-size:12.5px; cursor:pointer;">
-                1위
+                      style="flex:1; padding:10px 0; border-radius:12px; border:1px solid #d1d5db; background:#ffffff;
+                             font-weight:850; font-size:13px; cursor:pointer;">
+                1순위
               </button>
               <button type="button" class="rankBtn" data-rank="2"
-                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
-                             font-weight:750; font-size:12.5px; cursor:pointer;">
-                2위
+                      style="flex:1; padding:10px 0; border-radius:12px; border:1px solid #d1d5db; background:#ffffff;
+                             font-weight:850; font-size:13px; cursor:pointer;">
+                2순위
               </button>
               <button type="button" class="rankBtn" data-rank="3"
-                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
-                             font-weight:750; font-size:12.5px; cursor:pointer;">
-                3위
-              </button>
-              <button type="button" id="rankClear"
-                      style="padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; background:#ffffff;
-                             font-weight:650; font-size:12.5px; cursor:pointer;">
-                해제
+                      style="flex:1; padding:10px 0; border-radius:12px; border:1px solid #d1d5db; background:#ffffff;
+                             font-weight:850; font-size:13px; cursor:pointer;">
+                3순위
               </button>
             </div>
 
             <div class="muted" style="font-size:12px; line-height:1.45;">
-              깃발을 선택한 뒤, 왼쪽 배치 결과에서 학생 이름을 클릭하면 해당 학생 위에 깃발이 표시됩니다.
+              1~3순위 선택 후, 배치 결과의 학생 이름 선택
             </div>
           </div>
 
           <!-- 저장 -->
           <div style="display:flex; gap:8px; margin-top:auto;">
             <button type="button" class="btn" id="btnBack"
-                    style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center;">
+                    style="flex:1; text-align:center; display:inline-flex; align-items:center; justify-content:center; background:#ffffff; border:1px solid #d1d5db;">
               돌아가기
             </button>
             <button type="submit" id="btnSavePerception" style="flex:1;">기록 저장</button>
@@ -250,7 +245,6 @@
   document.querySelectorAll('.rankBtn').forEach(btn => {
     btn.addEventListener('click', () => setActiveRank(Number(btn.dataset.rank)));
   });
-  document.getElementById('rankClear')?.addEventListener('click', () => setActiveRank(null));
 
   confidenceSlider?.addEventListener('input', () => syncHidden());
 
