@@ -120,11 +120,12 @@ def init_db() -> None:
 
         migrations: List[Tuple[int, List[str]]] = []
 
+        migrations: List[Tuple[int, List[str]]] = []
+
         # -------------------
         # Migration v1: canonical schema for current app
         # -------------------
         migrations.append((1, [
-            # teachers
             """
             CREATE TABLE IF NOT EXISTS teachers (
                 id SERIAL PRIMARY KEY,
@@ -132,8 +133,6 @@ def init_db() -> None:
                 created_at TIMESTAMP DEFAULT NOW()
             );
             """,
-
-            # classes
             """
             CREATE TABLE IF NOT EXISTS classes (
                 id SERIAL PRIMARY KEY,
@@ -143,8 +142,6 @@ def init_db() -> None:
                 created_at TIMESTAMP DEFAULT NOW()
             );
             """,
-
-            # students
             """
             CREATE TABLE IF NOT EXISTS students (
                 id SERIAL PRIMARY KEY,
@@ -153,8 +150,6 @@ def init_db() -> None:
                 name TEXT NOT NULL
             );
             """,
-
-            # student_sessions (canonical: sid + placements JSONB)
             """
             CREATE TABLE IF NOT EXISTS student_sessions (
                 id SERIAL PRIMARY KEY,
@@ -162,26 +157,17 @@ def init_db() -> None:
                 sid TEXT NOT NULL,
                 student_name TEXT NOT NULL,
                 placements JSONB,
-                placements_json TEXT,                -- legacy compatibility
+                placements_json TEXT,
                 confidence INTEGER,
                 priority INTEGER,
                 submitted BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT NOW()
             );
             """,
-            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS sid TEXT;",
-            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS student_name TEXT;",
-
             """
             CREATE UNIQUE INDEX IF NOT EXISTS uq_student_sessions
             ON student_sessions (class_code, sid, student_name);
             """,
-            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS placements JSONB;",
-            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS placements_json TEXT;",
-            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS submitted BOOLEAN DEFAULT FALSE;",
-            "ALTER TABLE student_sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();",
-
-            # teacher_placement_runs (canonical: session_id + placements JSONB + timing)
             """
             CREATE TABLE IF NOT EXISTS teacher_placement_runs (
                 id SERIAL PRIMARY KEY,
@@ -191,7 +177,7 @@ def init_db() -> None:
                 condition TEXT,
                 tool_run_id INTEGER,
                 placements JSONB,
-                placements_json TEXT,                -- legacy compatibility
+                placements_json TEXT,
                 submitted BOOLEAN DEFAULT FALSE,
                 started_at TIMESTAMP DEFAULT NOW(),
                 ended_at TIMESTAMP,
@@ -204,18 +190,6 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS ix_teacher_runs_class_session
             ON teacher_placement_runs (class_code, session_id);
             """,
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS condition TEXT;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS tool_run_id INTEGER;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS placements JSONB;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS placements_json TEXT;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS submitted BOOLEAN DEFAULT FALSE;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS started_at TIMESTAMP DEFAULT NOW();",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS duration_ms INTEGER;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS confidence_score INTEGER;",
-            "ALTER TABLE teacher_placement_runs ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();",
-
-            # teacher_decisions (canonical: run_id rows)
             """
             CREATE TABLE IF NOT EXISTS teacher_decisions (
                 id SERIAL PRIMARY KEY,
@@ -231,11 +205,6 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS ix_teacher_decisions_run
             ON teacher_decisions (run_id);
             """,
-            "ALTER TABLE teacher_decisions ADD COLUMN IF NOT EXISTS decision_confidence INTEGER;",
-            "ALTER TABLE teacher_decisions ADD COLUMN IF NOT EXISTS reason_tags JSONB;",
-            "ALTER TABLE teacher_decisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();",
-
-            # analysis_cache
             """
             CREATE TABLE IF NOT EXISTS analysis_cache (
                 id SERIAL PRIMARY KEY,
@@ -247,57 +216,32 @@ def init_db() -> None:
                 UNIQUE(class_code, session_id, cache_key)
             );
             """,
-            "ALTER TABLE analysis_cache ADD COLUMN IF NOT EXISTS payload JSONB;",
-            "ALTER TABLE analysis_cache ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();",
         ]))
 
         # -------------------
-        # Migration v2: roster(gender/pin/active) + finalize + artifacts
+        # Migration v2: roster + finalize + exclusions
         # -------------------
         migrations.append((2, [
-            # --- 학생 관리(전입/전출/성별/개인코드) ---
             "ALTER TABLE students ADD COLUMN IF NOT EXISTS gender TEXT;",
             "ALTER TABLE students ADD COLUMN IF NOT EXISTS pin_code TEXT;",
             "ALTER TABLE students ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT NOW();",
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;",
-
-            # 학급 내 pin 중복 방지(학급 단위로만 유일하면 됨)
             """
             CREATE UNIQUE INDEX IF NOT EXISTS uq_students_class_pin
             ON students (class_code, pin_code);
             """,
-
-            # --- 회차 마무리 상태(회차당 1행) ---
             """
             CREATE TABLE IF NOT EXISTS session_finalizations (
                 id SERIAL PRIMARY KEY,
                 class_code TEXT NOT NULL,
                 session_id TEXT NOT NULL,
                 teacher_username TEXT NOT NULL,
-
-                preview_seen BOOLEAN DEFAULT FALSE,
-                preview_seen_at TIMESTAMP,
-
                 exclusions_resolved BOOLEAN DEFAULT FALSE,
-                exclusions_resolved_at TIMESTAMP,
-
                 survey_submitted BOOLEAN DEFAULT FALSE,
-                survey_submitted_at TIMESTAMP,
-
                 finalized BOOLEAN DEFAULT FALSE,
-                finalized_at TIMESTAMP,
-
                 updated_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(class_code, session_id)
             );
             """,
-            """
-            CREATE INDEX IF NOT EXISTS ix_session_finalizations_class_session
-            ON session_finalizations (class_code, session_id);
-            """,
-
-            # --- 참여 제외 기록(학생 단위) ---
             """
             CREATE TABLE IF NOT EXISTS session_exclusions (
                 id SERIAL PRIMARY KEY,
@@ -310,19 +254,18 @@ def init_db() -> None:
                 UNIQUE(class_code, session_id, student_name)
             );
             """,
-            """
-            CREATE INDEX IF NOT EXISTS ix_session_exclusions_class_session
-            ON session_exclusions (class_code, session_id);
-            """,
+        ]))
 
-            # --- 교사 설문(회차당 1행) ---
+        # -------------------
+        # Migration v3: teacher_surveys (fix missing table on old DBs)
+        # -------------------
+        migrations.append((3, [
             """
             CREATE TABLE IF NOT EXISTS teacher_surveys (
                 id SERIAL PRIMARY KEY,
                 class_code TEXT NOT NULL,
                 session_id TEXT NOT NULL,
                 teacher_username TEXT NOT NULL,
-
                 q1_help INTEGER,
                 q2_new TEXT,
                 q2_detail TEXT,
@@ -332,7 +275,6 @@ def init_db() -> None:
                 q5_conf TEXT,
                 q6_next TEXT,
                 q7_feedback TEXT,
-
                 submitted_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(class_code, session_id)
             );
@@ -341,27 +283,8 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS ix_teacher_surveys_class_session
             ON teacher_surveys (class_code, session_id);
             """,
-
-            # --- 회차 결과 스냅샷(논문 재현성/추적용) ---
-            """
-            CREATE TABLE IF NOT EXISTS session_artifacts (
-                id SERIAL PRIMARY KEY,
-                class_code TEXT NOT NULL,
-                session_id TEXT NOT NULL,
-                artifact_key TEXT NOT NULL,
-                artifact_version TEXT NOT NULL,
-                params JSONB,
-                payload JSONB NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE(class_code, session_id, artifact_key)
-            );
-            """,
-            """
-            CREATE INDEX IF NOT EXISTS ix_session_artifacts_class_session
-            ON session_artifacts (class_code, session_id);
-            """,
         ]))
+
 
 
         migrations.sort(key=lambda x: int(x[0]))
