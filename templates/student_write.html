@@ -23,8 +23,8 @@
   </p>
 
   <div class="subtitle" style="text-align:left; margin-bottom:12px;">
-    오른쪽(또는 아래) 친구 이름을 <b>그대로 끌어서</b> 아래 공간에 놓아 주세요.
-    가운데(나)와 <b>가까울수록 친하다고 생각하는 친구</b>입니다.<br>
+    학생 목록에 있는 이름을 끌어서 아래 공간에 놓아 주세요.
+    가운데 있는 나를 기준으로 <b>가까울수록 친하다고 생각하는 친구</b>입니다.<br>
     <b>자주 같이 다니는 친구들은 서로 가깝게 놓아주세요.</b>
   </div>
 
@@ -58,13 +58,13 @@
         </div>
 
         <div class="muted" style="margin-top:8px; font-size:12px;">
-          팁: 화면 가운데(나)를 기준으로 생각하면 됩니다. 이름은 가까울수록 왼쪽/위쪽/오른쪽/아래쪽 어디든 괜찮습니다.
+          팁: <b>느껴지는 거리감대로 편하게 배치해 주세요.<b> 친구를 평가하거나 점수를 매기는 활동은 아니에요.
         </div>
       </div>
 
-      <!-- 친구 목록 -->
+      <!-- 학생 목록 -->
       <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fbfbfd; height:clamp(360px, 62vh, 520px); display:flex; flex-direction:column;">
-        <div style="font-weight:800; margin-bottom:10px;">친구 목록</div>
+        <div style="font-weight:800; margin-bottom:10px;">학생 목록</div>
         <div id="friendList" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; align-content:start; flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable;">
           {% for f in friends %}
           <div class="chip" data-name="{{ f }}"
@@ -318,7 +318,7 @@
       dragging = false;
       el.style.cursor = 'grab';
 
-      // 친구 목록에 드롭하면 되돌리기
+      // 학생 목록에 드롭하면 되돌리기
       const fl = friendList.getBoundingClientRect();
       const inFriendList =
         (e.clientX >= fl.left && e.clientX <= fl.right &&
