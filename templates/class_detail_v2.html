@@ -878,28 +878,33 @@ if (btnExcludeSaveReasons) {
       try{
         const st = await apiGetState();
         if (!st) return;
-
+    
         exclusionResolved = !!st.exclusions_resolved;
         surveySubmitted = !!st.survey_submitted;
         finalized = !!st.finalized;
-
+    
         updateGates();
-
-        // ✅ 이미 저장된 exclusions가 있으면, 입력 UI 대신 "저장 완료 요약"으로 즉시 렌더
-        if (exclusionResolved && Array.isArray(st.exclusions_items) && st.exclusions_items.length > 0){
+    
+        // ✅ 이미 저장된 참여 제외가 있으면, 입력 UI 대신 "저장 완료 요약"을 바로 보여주기
+        // st.exclusions: [{student_name, excluded, reason}, ...]
+        const savedExcluded = Array.isArray(st.exclusions)
+          ? st.exclusions.filter(x => x && x.excluded && (String(x.reason || '').trim().length > 0))
+          : [];
+    
+        if (exclusionResolved && savedExcluded.length > 0){
           if (excludeReasons) excludeReasons.style.display = 'none';
-          renderExcludedSummary(st.exclusions_items);
-
-          // 참여 제외 박스가 열려있든 아니든, 열면 바로 요약이 보이도록 유지
-          if (boxExclude && (boxExclude.style.display === 'block')) {
-            // already open: keep
-          }
+          renderExcludedSummary(savedExcluded);
+    
+          // 입력 시작 버튼들도 숨기고 싶으면(완료 UI만 보이게)
+          if (btnExcludeYes) btnExcludeYes.style.display = 'none';
+          if (btnExcludeNo) btnExcludeNo.style.display = 'none';
         }
-
+    
       } catch(e){
         // silent
       }
     }
+
 
 
     // Exclude panel open/close
