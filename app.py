@@ -2368,42 +2368,70 @@ def class_detail_v2(code):
 
     open_panel = (request.args.get("open") or "").strip() == "1"
 
-    if engine:
-        cls = db_get_class_for_teacher(code, session["teacher"])
-        if not cls or cls.get("_forbidden"):
-            return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
+    if not engine:
+        return "DB가 연결되어 있지 않습니다.", 500
 
-        cls = ensure_class_schema(cls)
-        students = db_get_students_in_class(code)
-        cls["students"] = students
+    cls = db_get_class_for_teacher(code, session["teacher"])
+    if not cls or cls.get("_forbidden"):
+        return "학급을 찾을 수 없거나 접근 권한이 없습니다.", 404
 
-        submitted_map = db_get_submitted_map(code, sid)
-        session["selected_class"] = code
+    cls = ensure_class_schema(cls)
 
-        rows: List[Dict[str, Any]] = []
-        for i, item in enumerate(students, start=1):
-            no = str(item.get("no", "") or i)
-            name = (item.get("name") or "").strip()
-            if not name:
-                continue
-            submitted = bool(submitted_map.get(name, False))
-            status = "완료" if submitted else "미완료"
-            rows.append({"no": no, "name": name, "status": status, "url_name": quote(name)})
+    students = db_get_students_in_class(code)
+    cls["students"] = students
 
-        session_links: List[Dict[str, str]] = []
-        for _sid, meta in sorted(cls.get("sessions", {}).items(), key=lambda x: int(x[0])):
-            # v2 uses 1-4 by default; still render whatever exists in schema, but UI buttons will show 1-4.
-            session_links.append({"sid": _sid, "label": meta.get("label", f"{_sid}차"), "url": f"/s/{code}/{_sid}"})
+    submitted_map = db_get_submitted_map(code, sid)
+    session["selected_class"] = code
 
-        return render_template(
-            "class_detail_v2.html",
-            cls=cls,
-            code=code,
-            rows=rows,
-            sid=sid,
-            session_links=session_links,
-            open_panel=open_panel,
-        )
+    # --- teacher placement run (for "완료/수정" UI) ---
+    teacher_run = None
+    try:
+        with engine.begin() as conn:
+            r = conn.execute(text("""
+                SELECT id, submitted
+                FROM teacher_placement_runs
+                WHERE class_code = :code
+                  AND session_id = :sid
+                  AND teacher_username = :t
+                ORDER BY id DESC
+                LIMIT 1
+            """), {"code": code, "sid": sid, "t": session["teacher"]}).fetchone()
+
+        if r:
+            teacher_run = {"id": int(r.id), "submitted": bool(r.submitted)}
+    except Exception:
+        # 테이블이 없거나(마이그레이션 누락 등) 조회 실패 시: UI는 기본 "시작"으로 표시
+        teacher_run = None
+
+    rows: List[Dict[str, Any]] = []
+    for i, item in enumerate(students, start=1):
+        no = str(item.get("no", "") or i)
+        name = (item.get("name") or "").strip()
+        if not name:
+            continue
+        submitted = bool(submitted_map.get(name, False))
+        status = "완료" if submitted else "미완료"
+        rows.append({"no": no, "name": name, "status": status, "url_name": quote(name)})
+
+    session_links: List[Dict[str, str]] = []
+    for _sid, meta in sorted(cls.get("sessions", {}).items(), key=lambda x: int(x[0])):
+        session_links.append({
+            "sid": _sid,
+            "label": meta.get("label", f"{_sid}차"),
+            "url": f"/s/{code}/{_sid}"
+        })
+
+    return render_template(
+        "class_detail_v2.html",
+        cls=cls,
+        code=code,
+        rows=rows,
+        sid=sid,
+        session_links=session_links,
+        open_panel=open_panel,
+        teacher_run=teacher_run,
+    )
+
 
 
 @app.route("/teacher/class/<code>/sync_from_sheet")
